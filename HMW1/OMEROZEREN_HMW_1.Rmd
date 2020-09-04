@@ -5,7 +5,7 @@ date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
   html_document:
     highlight: tango
-    theme: journal
+    theme: journalj
     toc: yes
     toc_depth: 5
     toc_float: yes
@@ -15,7 +15,7 @@ output:
 ---
 
 
-Exercises 2.1, 2.2, 2.3 and 2.6 from the Hyndman online Forecasting book. The rpubs version of this work can be found [here](https://rpubs.com/plb_lttfer/572895), and source/data can be found on github [here](https://github.com/plb2018/DATA624/tree/master/Homework1).
+Exercises 2.1, 2.2, 2.3 and 2.6 from the Hyndman online Forecasting book.
  
  
 ```{r load.requirements, warning = FALSE, message = FALSE}
@@ -121,7 +121,7 @@ Download some monthly Australian retail data from the book website. These repres
 #create a temp file
 temp_file <- tempfile(fileext = ".xlsx")
 #grab a copy of the xl file from my github, save to temp create above
-download.file(url = "https://github.com/plb2018/DATA624/raw/master/Homework1/retail.xlsx", 
+download.file(url = "https://github.com/omerozeren/DATA624/raw/master/HMW1/retail.xlsx", 
               destfile = temp_file, 
               mode = "wb", 
               quiet = TRUE)
@@ -136,7 +136,23 @@ gglagplot(my.ts)
 ggAcf(my.ts)
 ```
 
-For this question I just picked a column at random and ended up with "Turnover ;  Total (State) ;  Takeaway food services ;".
+
+
+Reference: "https://otexts.com/fpp2/autocorrelation.html"
+
+"Trend: A trend exists when there is a long-term increase or decrease in the data. It does not have to be linear. Sometimes we will refer to a trend as "changing direction", when it might go from an increasing trend to a decreasing trend."
+
+"Seasonal: A seasonal pattern occurs when a time series is affected by seasonal factors such as the time of the year or the day of the week. Seasonality is always of a fixed and known frequency. The monthly sales of antidiabetic drugs above shows seasonality which is induced partly by the change in the cost of the drugs at the end of the calendar year."
+
+"Cyclic: A cycle occurs when the data exhibit rises and falls that are not of a fixed frequency. These fluctuations are usually due to economic conditions, and are often related to the "business cycle". The duration of these fluctuations is usually at least 2 years."
+
+"When data have a trend, the autocorrelations for small lags tend to be large and positive because observations nearby in time are also nearby in size. So the ACF of trended time series tend to have positive values that slowly decrease as the lags increase.
+
+When data are seasonal, the autocorrelations will be larger for the seasonal lags (at multiples of the seasonal frequency) than for other lags.
+
+When data are both trended and seasonal, you see a combination of these effects."
+
+For this question I just picked a column at random and ended up with "Turnover ;  Total (State) ; 
 
 * As per the timeseries plot, there is a clear upward sloping trend in the data and there are definitely some seasonal / cyclical effects apparent
 * The seasonaly plot shows a few things:  a consistent dip in Feb, a rise towards the end of of the year. The same is present in the sub-season plot.
