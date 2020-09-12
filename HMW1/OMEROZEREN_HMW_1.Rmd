@@ -1,17 +1,13 @@
 ---
-title: "DATA 607 - Homework 1"
+title: "DATA 624 - Homework 1"
 author: "OMER OZEREN"
-date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
   html_document:
     highlight: tango
-    theme: journalj
+    theme: journal
     toc: yes
     toc_depth: 5
     toc_float: yes
-  word_document:
-    toc: yes
-    toc_depth: '5'
 ---
 
 
@@ -19,8 +15,6 @@ Exercises 2.1, 2.2, 2.3 and 2.6 from the Hyndman online Forecasting book.
  
  
 ```{r load.requirements, warning = FALSE, message = FALSE}
-#clear the workspace
-rm(list = ls())
 #load req's packages
 library(forecast)
 library(readxl)
@@ -47,7 +41,6 @@ describe.data <- function(data) {
 ### Gold
 
 ```{r gold}
-#help(gold)
 autoplot(gold)
 question1 <- describe.data(gold)
 ```
@@ -60,7 +53,6 @@ question1 <- describe.data(gold)
 ### Wollyrnq
 
 ```{r wollyrnq}
-#help(woolyrnq)
 autoplot(woolyrnq)
 question2 <- describe.data(woolyrnq)
 ```
@@ -72,7 +64,6 @@ question2 <- describe.data(woolyrnq)
 ### Gasoline
 
 ```{r gas}
-#help(gas)
 autoplot(gas)
 question3 <- describe.data(gas)
 ```
@@ -120,7 +111,6 @@ Download some monthly Australian retail data from the book website. These repres
 ```{r aussie.retail.data}
 #create a temp file
 temp_file <- tempfile(fileext = ".xlsx")
-#grab a copy of the xl file from my github, save to temp create above
 download.file(url = "https://github.com/omerozeren/DATA624/raw/master/HMW1/retail.xlsx", 
               destfile = temp_file, 
               mode = "wb", 
@@ -135,9 +125,6 @@ ggsubseriesplot(my.ts)
 gglagplot(my.ts)
 ggAcf(my.ts)
 ```
-
-
-
 Reference: "https://otexts.com/fpp2/autocorrelation.html"
 
 "Trend: A trend exists when there is a long-term increase or decrease in the data. It does not have to be linear. Sometimes we will refer to a trend as "changing direction", when it might go from an increasing trend to a decreasing trend."
@@ -155,8 +142,7 @@ When data are both trended and seasonal, you see a combination of these effects.
 For this question I just picked a column at random and ended up with "Turnover ;  Total (State) ; 
 
 * As per the timeseries plot, there is a clear upward sloping trend in the data and there are definitely some seasonal / cyclical effects apparent
-* The seasonaly plot shows a few things:  a consistent dip in Feb, a rise towards the end of of the year. The same is present in the sub-season plot.
-* The lag plots are difficult to look at "as is" because the seasonal effects are likely weak.  I wonder whether it would make more sense to difference the timeseries before applying this plotting function
+* The seasonaly plot shows a few things:  a consistent dip in Feb, a rise towards the end of of the year.
 * The ACF plot shows a high degree of auto-correlation with low decay.
 
 
@@ -195,10 +181,11 @@ ggsubseriesplot(my.ts)
 gglagplot(my.ts)
 ggAcf(my.ts)
 ```
-* Once again, these data are clearly seasonal and show little trend, on aggregate.
+
+* The datais  clearly seasonal and show little trend, on aggregate.
 * The seasonality plots shows a dip in Feb, then a clear rise to a peak in Jul.  Thereafter, it drops off slightly and seems to flatten our towards the end of the year.
 * The lag plots are informative here also with Feb consistently appearing at the bottom and Jul, near the top.  The 12 month panel suggests an annual seasonality.
-* The ACF almost looks like a sine wave, indicative of a pattern in the data.  The peaks are at 12 and 24, suggesting an annual season.
+* The ACF is  indicative of a pattern in the data.  The peaks are at 12 and 24, suggesting an annual season.
 
 
 
@@ -235,9 +222,9 @@ ggAcf(my.ts)
 ```
 
 * This data shows a clear cycle and no trend.
-* Given that the data is annual observations, there is no "seasonal" effect, however the cycle, which appears to be about 10 years, is quite apparent.
+* Given that the data is annual observations, there is no "seasonal" effect.
 * The lag plots show the most dispersion at the bottom of the cycle (panel 3 - 6) and the least, or at least lower dispersion near the top of the cycle (panel 9 - 11)
-* The ACF is also indicative of a cyclical pattern in that it looks like a sine wave with nadirs and peaks every 5 & 10 years, respectively.
+* The ACF is also indicative of a cyclical pattern in that it looks like a sine wave with nadirs and peaks every 5 & 10 years.
 
 
 
@@ -254,7 +241,6 @@ ggAcf(my.ts)
 ```
 
 * This data shows a noisy up trend with apparent seasonality.
-* The seasonal plot shows a peak near weeks 0-4 and a lull for the few weeks following.  It's doesn't appear terribly strong.
-* The lag plots show a high degree of relatedness in all cases, but ar hard to look at otherwise.
-* The ACF shows a slow and cosistent decay and has an odd pattern... possibly of an annual season.
-* My gut feel is that this data might be easier to digest as Monthly or Quarterly - 
+* The seasonal plot shows a peak near weeks 0-4 and a lull for the few weeks following.
+* The lag plots show a high degree of relatedness in all cases
+* The ACF shows a slow and cosistent decay  possibly of an annual season.
