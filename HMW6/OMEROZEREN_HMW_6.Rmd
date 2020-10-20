@@ -1,0 +1,756 @@
+---
+title: "DATA 624 - Homework 6"
+author: "OMER OZEREN"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+---
+
+```{r echo=FALSE, include=FALSE}
+library(fpp2)
+library(tseries)
+library(urca)
+```
+
+Exercises 8.1, 8.2, 8.3, 8.5, 8.6 and 8.7  from the Hyndman online Forecasting book. 
+
+## Question 8.1 
+Figure 8.31 shows the ACFs for 36 random numbers, 360 random numbers and 1,000 random numbers.
+
+### a) Explain the differences among these figures. Do they all indicate that the data are white noise?
+
+A time series is white noise if the variables are independent and identically distributed with a mean of zero. This means that all variables have the same variance (sigma^2) and each value has a zero correlation with all other values in the series.The figures indicate that the data is white noise (residuals correlated mean=0,variance=constant).
+
+### B) Why are the critical values at different distances from the mean of zero? Why are the autocorrelations different in each figure when they each refer to white noise?
+
+If the series is a weakly stationary time series (with mean ) with  auto-covariances
+then a law of large numbers holds. The reason why critical values are different is that critical values differ depending upon the amount of data.
+
+## Question 8.2 
+A classic example of a non-stationary series is the daily closing IBM stock price series (data set ibmclose). Use R to plot the daily closing prices for IBM stock and the ACF and PACF. Explain how each plot shows that the series is non-stationary and should be differenced.
+
+```{r Raw levels}
+ggtsdisplay(ibmclose)
+```
+
+
+The ACF plot indicates time series (IBM Closing Prices) is not stationary level because of very high autocorrelation values.
+By looking at the autocorrelation function (ACF) and partial autocorrelation (PACF) plots of the differenced series, we can verify the numbers of AR and/or MA terms that are needed.The ACF plot is merely a bar chart of the coefficients of correlation between a time series and lags of itself.The ACF graph in ibmclose data shows the observed correlation is well above the critical values.In stationary level series,The ACF will drop to zero quickly.The PACF plot is a plot of the partial correlation coefficients between the series and lags of itself.
+
+
+```{r differenced}
+ibmclose.diff <- diff(ibmclose)
+ggtsdisplay(ibmclose.diff)
+```
+
+In stationary level series(differenced),The ACF dropped to zero quickly.However, we still get some extreme values that greater than critical value (0.10).Our threshold is really important in this case because If we think that threshold for critical values needs to be 0.15, we can assume that there are no extreme values.
+
+## Question 8.3
+
+For the following series, find an appropriate Box-Cox transformation and order of differencing in order to obtain stationary data.
+
+
+
+### A) usnetelec
+
+**The trend in timeseries looks nearly linear.I wil check stationary status  to determine the order of differencing.**
+
+```{r}
+ggtsdisplay(usnetelec, main = "National Net Electricity-RAW SERIES") 
+```
+
+
+#### Ljung-box test-RAW data series:
+
+```{r}
+Box.test(usnetelec, type = "Ljung-Box")
+```
+
+As we seet hat  the p-value is low (p-value = 4.196e-13), the Null hypothesis is REJECTED (Autocorrelation exists). 
+
+#### Box-Cox transformation:
+
+```{r}
+usnetelec_lambda <- round(BoxCox.lambda(usnetelec),5)
+usnetelec_BC <- BoxCox(usnetelec, usnetelec_lambda)
+ggtsdisplay(usnetelec_BC, main = paste("National Net Electricity- BoxCox lambda = ",
+                                       usnetelec_lambda))
+```
+
+Time series data with Box-Cox transformation still gives non-stationary data (ADF plot)
+
+
+```{r}
+Box.test(usnetelec_BC, type = "Ljung-Box")
+```
+
+Because the p-value is still low (p-value = 5.035e-13), the Null hypothesis is  REJECTED (Autocorrelation exists).
+
+#### Differenced Box-Cox Data:
+```{r}
+usnetelec_BC_ndiffs <- ndiffs(usnetelec_BC)
+ggtsdisplay(diff(usnetelec_BC), main=paste("National Net Electricity - BoxCox lambda = ",
+                                           usnetelec_lambda," - first difference"))
+ggtsdisplay(diff(diff(usnetelec_BC)), main=paste("National Net Electricity - BoxCox lambda = ",
+                                                 usnetelec_lambda," - second difference"))
+```
+
+I'm going to test two different lag of orders such as I(1),and (2)
+
+#### Ljung-box test-Transformed and Differenced  data series: Box-Cox order(1):
+
+```{r}
+usnetelec_BC %>% diff() -> usnetelec_BC_d1
+ggtsdisplay(usnetelec_BC_d1, main = paste("US Net Electricity - BoxCox lambda = ",
+                                          usnetelec_lambda, "first difference"))
+#Ljung-box test:
+Box.test(usnetelec_BC_d1, type = "Ljung-Box")
+```
+
+I noticed that the p-value is greater than p-value threshold (0.05), we FAIL TO REJECT the null hypothesis, which states the data are independent (i.e., no serial correlation.)So, first-differenced `usnetelec` data can be thought of as a white noise series.
+   
+   
+#### KPSS Test Transformed and Differenced  data series: Box-Cox order(1):
+```{r}
+kpss.test(usnetelec_BC_d1, "Level", lshort = F)
+kpss.test(usnetelec_BC_d1, "Trend", lshort = F)
+usnetelec_BC_d1 %>% ur.kpss(type="mu", lags="long") %>% summary()
+usnetelec_BC_d1 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+**The first differenced series ,order(1), data with Box-Cox transformation pass on Both KPSS tests which states that second-differencing is not required.**
+
+
+### B) usgdp
+
+**The trending timeseries `usgdp`  looks nearly linear.I will check stationary status  to determine the order of differencing.**
+
+```{r}
+ggtsdisplay(usgdp, main = "National GDP-RAW SERIES") 
+```
+
+
+#### Ljung-box test-RAW data series:
+
+```{r}
+Box.test(usgdp, type = "Ljung-Box")
+```
+
+As we seet hat  the p-value is low (p-value < 2.2e-16), the Null hypothesis is REJECTED 
+
+#### Box-Cox transformation:
+
+```{r}
+usgdp_lambda <- round(BoxCox.lambda(usgdp),5)
+usgdp_BC <- BoxCox(usgdp, usgdp_lambda)
+ggtsdisplay(usgdp_BC, main = paste("National GDP- BoxCox lambda = ",
+                                       usgdp_lambda))
+```
+
+Time series data with Box-Cox transformation still gives non-stationary data (ADF plot).The graph of the Box-Cox transformed data shows strong autocorrelation.
+
+
+```{r}
+Box.test(usgdp_BC, type = "Ljung-Box")
+```
+
+Because the p-value is still low (p-value < 2.2e-16), the Null hypothesis is  REJECTED .(Autocorrelation exists)
+
+#### Differenced Box-Cox Data:
+```{r}
+usgdp_BC_ndiffs <- ndiffs(usgdp_BC)
+ggtsdisplay(diff(usgdp_BC), main=paste("National GDP- BoxCox lambda = ",
+                                           usgdp_lambda," - first difference"))
+ggtsdisplay(diff(diff(usgdp_BC)), main=paste("National GDP - BoxCox lambda = ",
+                                                 usgdp_lambda," - second difference"))
+```
+
+I'm going to test two different orders (1) and (2)
+
+#### Ljung-box test-Transformed and Differenced  data series: Box-Cox order(1):
+
+```{r}
+usgdp_BC %>% diff() -> usgdp_BC_d1
+ggtsdisplay(usgdp_BC_d1, main = paste("National GDP - BoxCox lambda = ",
+                                          usgdp_lambda, "first difference"))
+#Ljung-box test:
+Box.test(usgdp_BC_d1, type = "Ljung-Box")
+```
+
+Because the p-value is still low (p-value < 1.029e-06), the Null hypothesis is  REJECTED (Autocorrelation exists).
+   
+#### Ljung-box test-Transformed and 2nd Differenced  data series: Box-Cox order(2):
+
+```{r}
+usgdp_BC %>% diff() %>% diff() -> usgdp_BC_d2
+ggtsdisplay(usgdp_BC_d2, main = paste("National GDP - BoxCox lambda = ",
+                                          usgdp_lambda, "second difference"))
+#Ljung-box test:
+Box.test(usgdp_BC_d2, type = "Ljung-Box")
+```
+
+The test states that the p-value is less than p-value threshold (0.05), we REJECT the null hypothesis (Autocorrelation exists).
+
+#### KPSS Test Transformed and Differenced  data series: Box-Cox order(1):
+```{r}
+kpss.test(usgdp_BC_d1, "Level", lshort = F)
+kpss.test(usgdp_BC_d1, "Trend", lshort = F)
+usgdp_BC_d1 %>% ur.kpss(type="mu", lags="long") %>% summary()
+usgdp_BC_d1 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+#### KPSS Test Transformed and 2nd Differenced  data series: Box-Cox order(2):
+```{r}
+kpss.test(usgdp_BC_d2, "Level", lshort = F)
+kpss.test(usgdp_BC_d2, "Trend", lshort = F)
+usgdp_BC_d2 %>% ur.kpss(type="mu", lags="long") %>% summary()
+usgdp_BC_d2 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+The KPSS test indicates that one differencing order(1) was sufficient to make the **Box-Cox transformed** data stationary.
+
+
+### C) mcopper
+
+**The trendin timeseries 'mcopper' looks nearly linear.I will check stationary status  to determine the order of differencing.**
+
+```{r}
+ggtsdisplay(mcopper, main = "Monthly Grade A Copper Prices-RAW SERIES") 
+```
+
+
+#### Ljung-box test-RAW data series:
+
+```{r}
+Box.test(mcopper, type = "Ljung-Box")
+```
+
+As we seet hat  the p-value is low (p-value < 2.2e-16), the Null hypothesis is REJECTED (Autocorrelation exists).
+
+#### Box-Cox transformation:
+
+```{r}
+mcopper_lambda <- round(BoxCox.lambda(mcopper),5)
+mcopper_BC <- BoxCox(mcopper, mcopper_lambda)
+ggtsdisplay(mcopper_BC, main = paste("Monthly Grade A Copper Prices- BoxCox lambda = ",
+                                       mcopper_lambda))
+```
+
+Time series data with Box-Cox transformation still gives non-stationary data(ADF plot)
+
+
+```{r}
+Box.test(mcopper_BC, type = "Ljung-Box")
+```
+
+Because the p-value is still low (p-value < 2.2e-16), the Null hypothesis is  REJECTED (Autocorrelation exists).
+
+#### Differenced Box-Cox Data:
+```{r}
+mcopper_BC_ndiffs <- ndiffs(mcopper_BC)
+ggtsdisplay(diff(mcopper_BC), main=paste("Monthly Grade A Copper Prices - BoxCox lambda = ",
+                                           mcopper_lambda," - first difference"))
+ggtsdisplay(diff(diff(mcopper_BC)), main=paste("Monthly Grade A Copper Prices - BoxCox lambda = ",
+                                                 mcopper_lambda," - second difference"))
+```
+
+I'm going to test two different differencing : orders (1) and (2)
+
+#### Ljung-box test-Transformed and Differenced  data series: Box-Cox order(1):
+
+```{r}
+mcopper_BC %>% diff() -> mcopper_BC_d1
+ggtsdisplay(mcopper_BC_d1, main = paste("Monthly Grade A Copper Prices - BoxCox lambda = ",
+                                          mcopper_lambda, "first difference"))
+#Ljung-box test:
+Box.test(mcopper_BC_d1, type = "Ljung-Box")
+```
+
+The p-value is still low (p-value = 3.353e-14), the Null hypothesis is  REJECTED (Autocorrelation exists).
+   
+   
+#### KPSS Test Transformed and Differenced  data series: Box-Cox order(1):
+```{r}
+kpss.test(mcopper_BC_d1, "Level", lshort = F)
+kpss.test(mcopper_BC_d1, "Trend", lshort = F)
+mcopper_BC_d1 %>% ur.kpss(type="mu", lags="long") %>% summary()
+mcopper_BC_d1 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+#### KPSS Test Transformed and Differenced  data series: Box-Cox order(2):
+```{r}
+mcopper_BC %>% diff()  %>% diff() -> mcopper_BC_d2
+kpss.test(mcopper_BC_d2, "Level", lshort = F)
+kpss.test(mcopper_BC_d2, "Trend", lshort = F)
+mcopper_BC_d2 %>% ur.kpss(type="mu", lags="long") %>% summary()
+mcopper_BC_d2 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+**The KPSS test indicates that one differencing ,order(1), should be used to make the `mcopper` data stationary**
+
+
+### D) enplanements
+
+**The graph of the enplanements raw data shows strong autocorrelation as well as seasonality.I will check stationary status  to determine the order of differencing.**
+
+```{r}
+ggtsdisplay(enplanements, main = "enplanements -RAW SERIES") 
+```
+
+
+#### Ljung-box test-RAW data series:
+
+```{r}
+Box.test(enplanements, type = "Ljung-Box")
+```
+
+As we seet hat  the p-value is low (p-value < 2.2e-16), the Null hypothesis is REJECTED (Autocorrelation exists). 
+
+#### Box-Cox transformation:
+
+```{r}
+enplanements_lambda <- round(BoxCox.lambda(enplanements),5)
+enplanements_BC <- BoxCox(enplanements, enplanements_lambda)
+ggtsdisplay(enplanements_BC, main = paste("enplanements- BoxCox lambda = ",
+                                       enplanements_lambda))
+```
+
+Time series data with Box-Cox transformation still gives non-stationary data(ADF plot).
+
+
+```{r}
+Box.test(enplanements_BC, type = "Ljung-Box")
+```
+
+Because the p-value is still low (p-value < 2.2e-16), the Null hypothesis is  REJECTED (Autocorrelation exists).
+
+#### Differenced Box-Cox Data:
+```{r}
+enplanements_BC_ndiffs <- ndiffs(enplanements_BC)
+ggtsdisplay(diff(enplanements_BC), main=paste("enplanements - BoxCox lambda = ",
+                                           enplanements_lambda," - first difference"))
+ggtsdisplay(diff(diff(enplanements_BC)), main=paste("enplanements - BoxCox lambda = ",
+                                                 enplanements_lambda," - second difference"))
+```
+
+The graph of the Box-Cox transformed data  still shows strong autocorrelation and seasonality I'm going to test two different differencing : orders (1) and (2)
+
+#### Ljung-box test-Transformed and Differenced  data series: Box-Cox order(1):
+
+```{r}
+enplanements_BC %>% diff() -> enplanements_BC_d1
+ggtsdisplay(enplanements_BC_d1, main = paste("enplanements - BoxCox lambda = ",
+                                          enplanements_lambda, "first difference"))
+#Ljung-box test:
+Box.test(enplanements_BC_d1, type = "Ljung-Box")
+```
+
+The p-value is still low (p-value = 4.739e-05), the Null hypothesis is  REJECTED (Autocorrelation exists).
+   
+```{r}
+enplanements_BC_nsdiffs <- nsdiffs(enplanements_BC)
+print(paste("Number of SEASONAL differences : enplanements_BC:", enplanements_BC_nsdiffs))
+enplanements_BC_ndiffs <- ndiffs(enplanements_BC)
+print(paste("Number of differences : enplanements_BC:", 
+            enplanements_BC_ndiffs))
+ggtsdisplay(diff(enplanements_BC), 
+            main=paste("enplanements - BoxCox lambda = ",
+                       enplanements_lambda," - first difference"))
+ggtsdisplay(diff(enplanements,lag=3), 
+            main=paste("enplanements - BoxCox lambda = ",
+                       enplanements_lambda," - quarterly seasonal diff"))
+ggtsdisplay(diff(enplanements,lag=12), 
+            main=paste("enplanements - BoxCox lambda = ",
+                       enplanements_lambda," - annual seasonal diff"))
+ggtsdisplay(diff(diff(enplanements,lag=3),lag=1), 
+            main=paste("enplanements - BoxCox lambda = ",
+                       enplanements_lambda," - quarterly seasonal diff + first diff"))
+ggtsdisplay(diff(diff(enplanements,lag=12),lag=1), 
+            main=paste("enplanements - BoxCox lambda = ",
+                       enplanements_lambda," - annual seasonal diff + first diff"))
+```
+The result of Box-Cox transformation with annual seasonal differencing, looks like to provide the best result.
+
+#### KPSS Test Transformed and annualy seasonal Differenced  data series: Box-Cox order(1):
+
+```{r}
+enplanements_BC %>% diff(lag=12) %>% diff(lag=1) -> enplanements_BC_s1_d1
+kpss.test(enplanements_BC_s1_d1, "Level", lshort = F)
+kpss.test(enplanements_BC_s1_d1, "Trend", lshort = F)
+enplanements_BC_s1_d1 %>% ur.kpss(type="mu", lags="long") %>% summary()
+enplanements_BC_s1_d1 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+#### KPSS Test Transformed and Differenced  data series: Box-Cox order(2):
+```{r}
+enplanements_BC %>% diff(lag=12) %>% diff(lag=2) -> enplanements_BC_s1_d2
+kpss.test(enplanements_BC_s1_d2, "Level", lshort = F)
+kpss.test(enplanements_BC_s1_d2, "Trend", lshort = F)
+enplanements_BC_s1_d2 %>% ur.kpss(type="mu", lags="long") %>% summary()
+enplanements_BC_s1_d2 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+**The KPSS test indicates that annual seasonality and first differences,order(1), should be used to make the `enplanements` data stationary**
+
+### E) visitors
+
+**The graph of the visitors raw data shows strong autocorrelation as well as seasonality.I will check stationary status  to determine the order of differencing.**
+
+```{r}
+ggtsdisplay(visitors, main = "visitors -RAW SERIES") 
+```
+
+
+#### Ljung-box test-RAW data series:
+
+```{r}
+Box.test(visitors, type = "Ljung-Box")
+```
+
+As we seet hat  the p-value is low (p-value < 2.2e-16), the Null hypothesis is REJECTED (Autocorrelation exists). 
+
+#### Box-Cox transformation:
+
+```{r}
+visitors_lambda <- round(BoxCox.lambda(visitors),5)
+visitors_BC <- BoxCox(visitors, visitors_lambda)
+ggtsdisplay(visitors_BC, main = paste("visitors- BoxCox lambda = ",
+                                       visitors_lambda))
+```
+
+Time series data with Box-Cox transformation still gives non-stationary data(ADF plot).
+
+
+```{r}
+Box.test(visitors_BC, type = "Ljung-Box")
+```
+
+Because the p-value is still low (p-value < 2.2e-16), the Null hypothesis is  REJECTED (Autocorrelation exists).
+
+#### Differenced Box-Cox Data:
+```{r}
+visitors_BC_ndiffs <- ndiffs(visitors_BC)
+ggtsdisplay(diff(visitors_BC), main=paste("visitors - BoxCox lambda = ",
+                                           visitors_lambda," - first difference"))
+ggtsdisplay(diff(diff(visitors_BC)), main=paste("visitors - BoxCox lambda = ",
+                                                 visitors_lambda," - second difference"))
+```
+
+The graph of the Box-Cox transformed data  still shows strong autocorrelation and seasonality .I'm going to test two different differencing : orders (1) and (2)
+
+#### Ljung-box test-Transformed and Differenced  data series: Box-Cox order(1):
+
+```{r}
+visitors_BC %>% diff() -> visitors_BC_d1
+ggtsdisplay(visitors_BC_d1, main = paste("visitors - BoxCox lambda = ",
+                                          visitors_lambda, "first difference"))
+#Ljung-box test:
+Box.test(visitors_BC_d1, type = "Ljung-Box")
+```
+
+The p-value is still low (p-value = 9.987e-05), the Null hypothesis is  REJECTED (Autocorrelation exists).
+   
+```{r}
+visitors_BC_nsdiffs <- nsdiffs(visitors_BC)
+print(paste("Number of SEASONAL differences for visitors_BC:", visitors_BC_nsdiffs))
+visitors_BC_ndiffs <- ndiffs(visitors_BC)
+print(paste("Number of differences suggested  visitors_BC:", 
+            visitors_BC_ndiffs))
+ggtsdisplay(diff(visitors_BC), 
+            main=paste("visitors - BoxCox lambda = ",
+                       visitors_lambda," - first difference"))
+ggtsdisplay(diff(visitors,lag=3), 
+            main=paste("visitors - BoxCox lambda = ",
+                       visitors_lambda," - quarterly seasonal diff"))
+ggtsdisplay(diff(visitors,lag=12), 
+            main=paste("visitors - BoxCox lambda = ",
+                       visitors_lambda," - annual seasonal diff"))
+ggtsdisplay(diff(diff(enplanements,lag=3),lag=1), 
+            main=paste("visitors - BoxCox lambda = ",
+                       visitors_lambda," - quarterly seasonal diff + first diff"))
+ggtsdisplay(diff(diff(visitors,lag=12),lag=1), 
+            main=paste("visitors - BoxCox lambda = ",
+                       visitors_lambda," - annual seasonal diff + first diff"))
+```
+The result of Box-Cox transformation with annual seasonal differencing, looks like to provide the best result.Howevers some lags (1,12) are exremly high.
+
+#### KPSS Test Transformed and annualy seasonal Differenced  data series: Box-Cox order(1):
+```{r}
+visitors_BC %>% diff(lag=12) %>% diff(lag=1) -> visitors_BC_s1_d1
+kpss.test(visitors_BC_s1_d1, "Level", lshort = F)
+kpss.test(visitors_BC_s1_d1, "Trend", lshort = F)
+visitors_BC_s1_d1 %>% ur.kpss(type="mu", lags="long") %>% summary()
+visitors_BC_s1_d1 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+#### KPSS Test Transformed and Differenced  data series: Box-Cox order(2):
+```{r}
+visitors_BC %>% diff(lag=12) %>% diff(lag=2) -> visitors_BC_s1_d2
+kpss.test(visitors_BC_s1_d2, "Level", lshort = F)
+kpss.test(visitors_BC_s1_d2, "Trend", lshort = F)
+visitors_BC_s1_d2 %>% ur.kpss(type="mu", lags="long") %>% summary()
+visitors_BC_s1_d2 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+**The KPSS test shows that annual seasonality with Box Cox transformation and first differences,order(1), should be used to make the `visitors` data stationary**
+
+## Question 8.6 
+Use R to simulate and plot some data from simple ARIMA models.
+
+### A) 
+
+Use the following R code to generate data from an AR(1) model  with $\phi_1=0.6$ and $\sigma^2=1$.  The process starts with  $y_1=0$.
+
+```{r}
+AR1 <- function(phi)
+{
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100)
+    y[i] <- phi*y[i-1] + e[i]
+  return(y)
+}
+phi_1 <- 0.60
+ggtsdisplay(AR1(phi_1),main=paste("AR(1) series, phi_1=",phi_1))
+```
+
+### B) 
+
+Produce a time plot for the series. How does the plot change as you change  $\phi_1$?
+
+```{r }
+set.seed(12345678)
+results = numeric()
+phi_seq <- seq(from=-1,to=1,by = 0.1)
+for (phi_1 in phi_seq) {
+  AR1_data <- AR1(phi_1)
+  AR1_stats <- c(Phi_1 = phi_1, summary(AR1_data),StDev=sd(AR1_data),SdDiff=sd(diff(AR1_data)))
+  AR1_main <- paste("AR(1) series, phi_1=",phi_1)
+  ggtsdisplay(AR1_data,main=AR1_main)
+  results <- rbind(results,AR1_stats)
+}
+results
+```
+
+
+### C) 
+
+Write your own code to generate data from an MA(1) model with  $\theta_1=0.6$ and $\sigma^2=1$.
+
+```{r }
+MA1 <- function(theta_1)
+{
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100)
+    y[i] <- e[i] + theta_1*e[i-1] 
+  return(y)
+}
+theta_1 <- 0.60
+ggtsdisplay(MA1(theta_1),main=paste("MA(1) series, theta_1=",theta_1))
+```
+
+### D) 
+
+Produce a time plot for the series. How does the plot change as you change  $\theta_1$ ?
+
+```{r}
+set.seed(12345678)
+results = numeric()
+theta_seq <- seq(from=-1,to=1,by = 0.1)
+for (theta_1 in theta_seq) {
+  MA1_data <- MA1(theta_1)
+  MA1_stats <- c(theta_1 = theta_1, summary(MA1_data),StDev=sd(MA1_data),SdDiff=sd(diff(MA1_data)))
+  MA1_main <- paste("MA(1) series, theta_1=",theta_1)
+  ggtsdisplay(MA1_data,main=MA1_main)
+  #print(MA1_stats)
+  MA1_stats_results <- rbind(results,MA1_stats)
+}
+results
+```
+
+
+### E) 
+
+Generate data from an ARMA(1,1) model with  $\phi_1=0.6$,  $\theta_1=0.6$, and $\sigma^2=1$.
+
+```{r}
+ARMA_1_1 <- function(phi_1, theta_1)
+{
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100)
+    y[i] <- phi_1*y[i-1] + theta_1*e[i-1] + e[i]
+  return(y)
+}
+phi_1 <- 0.60
+theta_1 <- 0.60
+ARMA_1_1_result <- ARMA_1_1(phi_1,theta_1)
+ggtsdisplay(ARMA_1_1_result,main=paste("ARMA(1,1) series, phi_1=", phi_1, ", theta_1=",theta_1))
+```
+
+### F) 
+
+Generate data from an AR(2) model with  $\phi_1=-0.8$,  $\phi_2=0.3$, and $\sigma^2=1$.(Note that these parameters will give a **non-stationary** series.)
+
+```{r}
+AR2 <- function(phi_1, phi_2)
+{
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 3:100)
+    y[i] <- phi_1*y[i-1] + phi_2*y[i-2] + e[i]
+  return(y)
+}
+phi_1 <- -0.80
+phi_2 <-  0.30
+AR2_result <- AR2(phi_1,phi_2) 
+ggtsdisplay(AR2_result,main=paste("AR(2) series, phi_1=", phi_1, ", phi_2=",phi_2))
+```
+
+### G) 
+
+Graph the latter two series and compare them.
+
+```{r}
+n=100
+par(mfrow=c(2,1))
+plot(ARMA_1_1_result[1:n], type="l", main="ARMA(1,1) - 100 observations",col="blue")
+plot(AR2_result[1:n], type="l", main="AR(2) - 100 observations",col="red")
+```
+ 
+## Question 8.7 
+
+Consider wmurders, the number of women murdered each year (per 100,000 standard population) in the United States.
+
+### A) 
+
+By studying appropriate graphs of the series in R, find an appropriate ARIMA(p,d,q) model for these data.
+
+```{r}
+wmurders %>% ggtsdisplay(main="wmurders (raw dataset)")
+```
+
+The raw data series doesn't indicates any  trend (e.g., seasonality,extreme values.)There is a strong pattern in the ACF function which might cause also pattern in PACF
+
+
+**(KPSS) test:**
+
+```{r}
+library(tseries)
+kpss.test(wmurders, "Level", lshort = F)
+kpss.test(wmurders, "Trend", lshort = F)
+wmurders %>% ur.kpss(type="mu", lags="long") %>% summary()
+wmurders %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+Level passes the test, but Trend fails.
+
+
+**ndiffs:**
+
+```{r}
+ndiffs(wmurders)
+```
+
+**I(1) first differences**
+
+```{r}
+wmurders_d1 <- wmurders %>% diff() 
+wmurders_d1 %>% ggtsdisplay(main="wmurders (first differences)")
+```
+
+**(KPSS) test:**
+
+```{r}
+kpss.test(wmurders_d1, "Level", lshort = F)
+kpss.test(wmurders_d1, "Trend", lshort = F)
+wmurders_d1 %>% ur.kpss(type="mu", lags="long") %>% summary()
+wmurders_d1 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+**I(2) Second differences**
+
+```{r}
+wmurders_d2 <- wmurders %>% diff() %>% diff()
+wmurders_d2 %>% ggtsdisplay(main="wmurders (second differences)")
+```
+
+**(KPSS) test:**
+
+```{r}
+kpss.test(wmurders_d2, "Level", lshort = F)
+kpss.test(wmurders_d2, "Trend", lshort = F)
+wmurders_d2 %>% ur.kpss(type="mu", lags="long") %>% summary()
+wmurders_d2 %>% ur.kpss(type="tau", lags="long") %>% summary()
+```
+
+The differecing I(2) passes the KPSS test.
+
+The differecing term,d,is 2 so our model will be  ARIMA(p,2,q).For the AR and MA terms,we need to look at the ACF and PASF plots.There is as spike in lag 1 so the model may be ARIMA(1,2,1) 
+
+### B) 
+
+Should you include a constant in the model? Explain.
+
+
+WE should Not include constant in the model, because a constant would create a shift, and there is no shift visible in the raw data.
+
+### C) 
+
+Write this model in terms of the backshift operator.
+
+We omitted the constat term :
+
+$(1-\phi_1B)  (1-B)^2 y_{t} = (1 + \theta_1 B )\varepsilon_t$
+
+### D) 
+
+Fit the model using R and examine the residuals. Is the model satisfactory?
+
+```{r}
+my_arima <- Arima(wmurders, order=c(1,2,1))
+checkresiduals(my_arima)
+```
+
+The residuals plot  shows that it is normal distributed however p-values greater than 0.10. The model is satisfactory
+
+## E) 
+
+Forecast three times ahead. Check your forecasts by hand to make sure that you know how they have been calculated.
+
+```{r}
+wmurders_forecast <- forecast(my_arima, h = 3)
+wmurders_forecast
+```
+
+
+### F)
+
+Create a plot of the series with forecasts and prediction intervals for the next three periods shown.
+
+```{r}
+autoplot(wmurders_forecast)
+```
+
+
+### G) 
+
+Does `auto.arima()` give the same model you have chosen? If not, which model do you think is better?
+
+```{r}
+wmurders_fit_autoarima <- auto.arima(wmurders)
+wmurders_fit_autoarima
+wmurders_forecast_autoarima <- forecast(wmurders_fit_autoarima, h = 3)
+wmurders_forecast_autoarima
+autoplot(wmurders_forecast_autoarima)
+```
+
+**The model selected is the same as chosen.**

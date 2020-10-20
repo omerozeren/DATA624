@@ -26,6 +26,7 @@ library(fpp2)
 library(VIM)
 library(mice)
 library(kableExtra)
+library(seasonal)
 ```
 
 ## Question 7.1
@@ -177,7 +178,7 @@ The Holt forecast appears better, The SES method generates straightline forecast
 ### d. 
 Calculate a 95% prediction interval for the first forecast for each series, using the RMSE values and assuming normal errors. Compare your intervals with those produced using `ses` and `holt`.
 
-# Ses Model
+#### Ses Model
 Prediction interval of R SES (Papeback) : `r round(model_ses_paperback$lower[1, '95%'],2)` , `r round(model_ses_paperback$upper[1, '95%'],2)`
 
 Prediction interval of R SES (Hardcover) : `r round(model_ses_hardcover$lower[1, '95%'],2)` , `r round(model_ses_hardcover$upper[1, '95%'],2)`
@@ -188,7 +189,7 @@ Prediction interval using RMSE SES (Paperback) :  `r round(model_ses_paperback$m
 Prediction interval using RMSE SES (Hardcover) :  `r round(model_ses_hardcover$mean[1] - 1.96 * accuracy(model_ses_hardcover)[2],2)`, `r round(model_ses_hardcover$mean[1] + 1.96 * accuracy(model_ses_hardcover)[2],2)`
 
 
-# Holts model
+#### Holts model
 
 Prediction interval of R Holt's (Papeback) : `r round(model_holt_paperback$lower[1, '95%'],2)` , `r round(model_holt_paperback$upper[1, '95%'],2)`
 
@@ -200,7 +201,7 @@ Prediction interval using RMSE Holt's (Paperback) :  `r round(model_holt_paperba
 Prediction interval using RMSE Holt's (Hardcover) :  `r round(model_holt_hardcover$mean[1] - 1.96 * accuracy(model_holt_hardcover)[2],2)`, `r round(model_holt_hardcover$mean[1] + 1.96 * accuracy(model_holt_hardcover)[2],2)`
 
 
-***They are different but close for both the models (SES and Holt)**
+**They are different but close for both the models (SES and Holt)**
 
 ## Question 7.7
 
@@ -244,4 +245,131 @@ eggs_rmse_df %>%
   kable_styling()
 ```
 
-**The minimum RMSE 26.54 occurs when lambda = TRUE which  model name is model_damped_eggs**
+**The minimum RMSE 26.54 occurs when lambda = TRUE which model name is model_damped_eggs**
+
+## Question 7.8
+
+```{r}
+#borrowed code from week1 hw to load the aussie retail data
+temp_file <- tempfile(fileext = ".xlsx")
+download.file(url = "https://github.com/omerozeren/DATA624/raw/master/HMW1/retail.xlsx", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+retaildata <- readxl::read_excel(temp_file,skip=1)
+aussie.retail <- ts(retaildata[,"A3349388W"],
+  frequency=12, start=c(1982,4))
+#run decomp as per the text
+x11.decomp <- seas(aussie.retail, x11="")
+autoplot(x11.decomp, main = "Aussie Retail - X11 Decomposition" )
+```
+
+
+### a. 
+
+Why is multiplicative seasonality necessary for this series?
+
+
+The multiplicative seasonality adjustment is really important when the variability in the series is increasing over time.The meaning the effect of the seasonality is added to the trend to get the forecast.
+
+### b. 
+
+Apply Holt-Winters' multiplicative method to the data. Experiment with making the trend damped.
+
+```{r}
+model_multiplicative <- hw(aussie.retail, seasonal = "multiplicative")
+autoplot(model_multiplicative) + 
+  ggtitle("Multiplicative") + 
+  ylab("Retail Sales")
+summary(model_multiplicative)
+model_multiplicative_damped <- hw(aussie.retail, seasonal = "multiplicative", damped = TRUE)
+autoplot(model_multiplicative_damped) + 
+  ggtitle("Multiplicative & Damped") + 
+  ylab("Retail Sales")
+summary(model_multiplicative_damped)
+```
+### c. 
+
+Compare the RMSE of the one-step forecasts from the two methods. Which do you prefer?
+
+```{r}
+cat("RMSE of Multiplicative = ", accuracy(model_multiplicative)[2])
+```
+
+```{r}
+cat("RMSE of Multiplicative & Damped = ", accuracy(model_multiplicative_damped)[2])
+```
+
+**The non-damped model is preforming better with lower RMSE.**
+
+d. Check that the residuals from the best method look like white noise.
+
+```{r}
+checkresiduals(model_multiplicative)
+```
+
+**ADF Test shows that the residuals seems like white noise.In addition to that The residuals are normally distributed with a mean of zero**
+
+### e. 
+
+Now find the test set RMSE, while training the model to the end of 2010. Can you beat the seasonal naive approach from Exercise 8 in Section 3.7?
+
+```{r}
+retail_train <- window(aussie.retail, end = c(2010, 12))
+retail_test <- window(aussie.retail, start = 2011)
+rmse <- function(model){
+  accuracy(model, retail_test)[4]
+}
+Model <- c("Seasonal Naive (Baseline)", 
+           "SES",
+           "Holt's Method",
+           "Damped Holt's Method",
+           "Holt-Winters Additive",
+           "Holt-Winters Multiplicative",
+           "Damped Holt-Winters Additive",
+           "Damped Holt-Winters Multiplicative")
+RMSE <- c(rmse(snaive(retail_train)), 
+          rmse(ses(retail_train)),
+          rmse(holt(retail_train)),
+          rmse(holt(retail_train, damped = TRUE)),
+          rmse(hw(retail_train, seasonal = "additive")),
+          rmse(hw(retail_train, seasonal = "multiplicative")),
+          rmse(hw(retail_train, seasonal = "additive", damped = TRUE)),
+          rmse(hw(retail_train, seasonal = "multiplicative", damped = TRUE)))
+rmse_df <- data.frame(Model, RMSE) 
+rmse_df %>%
+  kable() %>%
+  kable_styling()
+```
+**By comparing all models,I found out `r rmse_df[rmse_df$RMSE == min(rmse_df$RMSE),]$Model` with `r rmse_df[rmse_df$RMSE == min(rmse_df$RMSE),]$RMSE` RMSE preformed the best on the test set.**
+
+## Question 7.9 
+
+For the same retail data, try an STL decomposition applied to the Box-Cox transformed series, followed by ETS on the seasonally adjusted data. How does that compare with your best previous forecasts on the test set?
+
+```{r}
+# Train Dta
+retail_train <- ts(as.vector(aussie.retail), start=c(1982,4), end=c(2010,12), frequency = 12)
+# Get the optimal lambda
+lambda <- BoxCox.lambda(retail_train)
+# Preform a Box-Cox transformation
+bc_retail_train <- BoxCox(retail_train, lambda = lambda)
+# Preform the STL decomposition
+stl_retail_train <- mstl(bc_retail_train)
+## Create a seasonally adjusted series
+sa_stl_retail_train <- stl_retail_train[,1] - stl_retail_train[,3]
+sa_retail_train <- InvBoxCox(sa_stl_retail_train, lambda = lambda)
+# the output
+autoplot(retail_train) + autolayer(sa_retail_train)
+```
+
+```{r}
+ets_retail_train <- forecast(sa_retail_train)
+rmse_df %>%
+  mutate(Model = as.character(Model)) %>%
+  rbind(c("STL Seasonally-Adjusted data", rmse(ets_retail_train))) %>%
+  kable() %>%
+  kable_styling()
+```
+
+**The ETS model error metric RMSE is  worse than the Seasonal Naive model.**
