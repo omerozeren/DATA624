@@ -1,0 +1,693 @@
+---
+title: "DATA 624 - PROJECT 1"
+author: "OMER OZEREN"
+output:
+  html_document:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '5'
+---
+# Project 1 
+
+```{r message=FALSE, warning=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(tseries)
+library(forecast)
+library(lubridate)
+library(tidyverse)
+library(gridExtra)
+library(kableExtra)
+```
+## Load Data
+
+**Load all three data for the project.**
+
+```{r warning=FALSE}
+temp_file <- tempfile(fileext = ".xlsx")
+download.file(url = "https://github.com/omerozeren/DATA624/blob/master/Project1/ATM624Data.xlsx?raw=true", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+atm_data <- readxl::read_excel(temp_file,skip=0,col_types = c("date","text","numeric"))
+download.file(url = "https://github.com/omerozeren/DATA624/blob/master/Project1/ResidentialCustomerForecastLoad-624.xlsx?raw=true", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+power_data <- readxl::read_excel(temp_file,skip=0,col_types = c("numeric","text","numeric"))
+download.file(url = "https://github.com/omerozeren/DATA624/blob/master/Project1/Waterflow_Pipe1.xlsx?raw=true", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+water1_data <- readxl::read_excel(temp_file,skip=0,col_types = c("date","numeric"))
+download.file(url = "https://github.com/omerozeren/DATA624/blob/master/Project1/Waterflow_Pipe2.xlsx?raw=true", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+water2_data <- readxl::read_excel(temp_file,skip=0,col_types = c("date","numeric"))
+```
+## Part A - ATM Forecast
+
+**In part A, I want you to forecast how much cash is taken out of 4 different ATM machines for May 2010.  The data is given in a single file.  The variable 'Cash' is provided in hundreds of dollars, other than that it is straight forward.   I am being somewhat ambiguous on purpose to make this have a little more business feeling.  Explain and demonstrate your process, techniques used and not used, and your actual forecast.  I am giving you data via an excel file, please provide your written report on your findings, visuals, discussion and your R code via an RPubs link along with the actual.rmd file  Also please submit the forecast which you will put in an Excel readable file.**
+
+
+### Exploratory Data Analysis(EDA)
+
+My process of EDA will take
+
+ - missing values
+ 
+ - sesonality and outlier analysis
+ 
+ - stationarity check for TimeSeries Models
+
+### ATM #1
+
+#### Data Cleanup
+
+There are only three missing values in atm_1 data. I will impute the missing values in order to create a timeseries data.
+
+```{r}
+atm1 <- atm_data %>%
+  filter(ATM == "ATM1")
+atm1$clean_cash <- c(tsclean(ts(atm1$Cash, start = decimal_date(as.Date(min(atm1$DATE))), frequency = 365)))
+```
+
+
+Here, I'd like to review the "atm1" timeseries data to determine whether there is a seosanality and ACF and PACF plots.
+
+```{r}
+ATM1 <- atm_data[atm_data$ATM == "ATM1",]
+ATM1 <- ATM1[complete.cases(ATM1),]
+ATM1 <- ts(ATM1[c("Cash")],frequency = 7)
+ggtsdisplay(ATM1, 
+            main = "RAW ATM1",
+            xlab = "DAY",
+            ylab = "CASH")
+```
+
+The ACF plot indicates that observations peak on every 7th lag.I will check Seasonality and Outlier for atm1 data.
+
+#### Outlier and Seasonality 
+
+```{r, warning=FALSE}
+atm1$weekday <- factor(weekdays(as.Date(atm1$DATE)))
+atm1$weekday <- ordered(atm1$weekday,levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
+#drop NaN values
+atm1 <- atm1[complete.cases(atm1),]
+ggplot(atm1[complete.cases(atm1),],aes(x=weekday,y=Cash,color=ATM))+
+  geom_boxplot()+
+  ggtitle("ATM #1 OUTLIER/SEASONALTY PLOT")
+```
+
+Box plots of the amount of cash is taken by customer in each of days from ATM1.As we can see on plot above, the Sunday has higher mean amount of cash is taken  than rest of days.The thursday has the minumum mean of cash amount is taken.The weekdays Tuesdays and Wendsday hold some extreme values (greater than 150).The analysis above drops missing values.
+
+
+####  Model Creation 
+
+
+I will use following forecating models on this time series and determine which one is better by estimatin error metric RMSE. I will use time series cross validation function to estimate RMSE for timeseries data.
+
+* Seasonal and Trend decomposition (STL) 
+* Seasonal and Trend decomposition  (STL) with ARIMA
+* Holt-Winters
+* Holt-Winters with Box Cox Adjustment
+* ARIMA
+* ARIMA with Box Cox Adjustment
+
+```{r}
+ATM1 <- atm_data[atm_data$ATM == "ATM1",]
+ATM1 <- ATM1[complete.cases(ATM1),]
+ATM1 <- ts(ATM1[c("Cash")],frequency = 7)
+Box.test(diff(ATM1,lag=7), type = "Ljung-Box")
+kpss.test(diff(ATM1,lag=7))
+ggtsdisplay(diff(ATM1,lag=7), 
+            main = "DIFFERENCED ATM1, Lag=7",
+            xlab = "DAY",
+            ylab = "")
+```
+
+The result of KPSS and Box-Cox test indicates that atm1 timeseries is statioanry.
+
+
+#### Seasonal and Trend decomposition (STL) 
+
+```{r}
+atm1_stl_fit <- ATM1 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE)
+checkresiduals(atm1_stl_fit)
+checkresiduals(atm1_stl_fit)
+atm1_stl_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Seasonal and Trend decomposition  (STL) with ARIMA
+
+```{r}
+atm1_stl_arima_fit <- ATM1 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE, method = "arima")
+checkresiduals(atm1_stl_arima_fit)
+atm1_stl_arima_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Holt-Winters
+
+```{r}
+atm1_hw_fit <- hw(ATM1, h = 31)
+checkresiduals(atm1_hw_fit)
+atm1_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+### Holt-Winters with Box Cox Adjustment
+
+```{r}
+atm1_lambda <- BoxCox.lambda(ATM1)
+atm1_adj_hw_fit <- hw(ATM1, h = 31, lambda = atm1_lambda)
+checkresiduals(atm1_adj_hw_fit)
+atm1_adj_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### ARIMA
+
+```{r}
+atm1_arima_fit <- auto.arima(ATM1)
+checkresiduals(atm1_arima_fit)
+atm1_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm1_arima_fit))
+```
+
+### ARIMA with Box Cox Adjustment
+
+```{r}
+lambda = BoxCox.lambda(ATM1)
+atm1_box_arima_fit <- auto.arima(ATM1,approximation = F,lambda = lambda)
+checkresiduals(atm1_box_arima_fit)
+atm1_box_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm1_box_arima_fit))
+```
+
+### MODEL EVALUATION
+
+I will use the `tsCV` function and evaluate the models.My goal is to find the model that produces minumum RMSE. 
+
+```{r}
+h <- 31
+get_rmse <- function(error) {
+  sqrt(mean(error^2, na.rm = TRUE))
+}
+atm1_arima_forecast <- function(x, h) {
+  forecast(Arima(x, order = c(0, 0, 1), seasonal = c(0, 1, 1)), h = h)
+}
+residuals_stl <- tsCV(ATM1, stlf, h = h, s.window = 7, robust = TRUE)
+residuals_stl_arima <- tsCV(ATM1, stlf, h = h, s.window = 7, robust = TRUE, method = "arima")
+residuals_hw <- tsCV(ATM1, hw, h = h)
+residuals_arima <- tsCV(ATM1, atm1_arima_forecast, h = h)
+data.frame(Model_Name = c("STL", "STL & ARIMA", "Holt-Winters", "ARIMA"),
+           RMSE = c(get_rmse(residuals_stl[, h]), get_rmse(residuals_stl_arima[, h]), get_rmse(residuals_hw[, h]), get_rmse(residuals_arima[, h]))) %>%
+  arrange(RMSE) %>%
+  kable() %>%
+  kable_styling()
+```
+
+The ARIMA model gives the minumum RMSE among the other models.
+
+### ATM #2
+
+#### Data Cleanup
+
+There are only three missing values in atm_1 data. I will impute the missing values in order to create a timeseries data.
+
+```{r}
+atm2 <- atm_data %>%
+  filter(ATM == "ATM2")
+```
+
+
+Here, I'd like to review the "atm2" timeseries data to determine whether there is a seosanality and ACF and PACF plots.
+
+```{r}
+ATM2 <- atm_data[atm_data$ATM == "ATM2",]
+ATM2 <- ATM2[complete.cases(ATM2),]
+ATM2 <- ts(ATM2[c("Cash")],frequency = 7)
+ggtsdisplay(ATM2, 
+            main = "RAW ATM2",
+            xlab = "DAY",
+            ylab = "CASH")
+```
+
+The ACF plot indicates that observations peak on every 7th lag.I will check Seasonality and Outlier for atm2 data.
+
+#### Outlier and Seasonality 
+
+```{r, warning=FALSE}
+atm2$weekday <- factor(weekdays(as.Date(atm2$DATE)))
+atm2$weekday <- ordered(atm2$weekday,levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
+#drop NaN values
+atm2 <- atm2[complete.cases(atm2),]
+ggplot(atm2[complete.cases(atm2),],aes(x=weekday,y=Cash,color=ATM))+
+  geom_boxplot()+
+  ggtitle("ATM #2 OUTLIER/SEASONALTY PLOT")
+```
+
+
+
+
+####  Model Creation 
+
+
+I will use following forecating models on this time series and determine which one is better by estimatin error metric RMSE. I will use time series cross validation function to estimate RMSE for timeseries data.
+
+* Seasonal and Trend decomposition (STL) 
+* Seasonal and Trend decomposition  (STL) with ARIMA
+* Holt-Winters
+* Holt-Winters with Box Cox Adjustment
+* ARIMA
+* ARIMA with Box Cox Adjustment
+
+```{r}
+ATM2 <- atm_data[atm_data$ATM == "ATM2",]
+ATM2 <- ATM2[complete.cases(ATM2),]
+ATM2 <- ts(ATM2[c("Cash")],frequency = 7)
+Box.test(diff(ATM2,lag=7), type = "Ljung-Box")
+kpss.test(diff(ATM2,lag=7))
+ggtsdisplay(diff(ATM2,lag=7), 
+            main = "DIFFERENCED ATM2, Lag=7",
+            xlab = "DAY",
+            ylab = "")
+```
+
+The result of KPSS and Box-Cox test indicates that atm1 timeseries is statioanry.
+
+
+#### Seasonal and Trend decomposition (STL) 
+
+```{r}
+atm2_stl_fit <- ATM2 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE)
+checkresiduals(atm2_stl_fit)
+checkresiduals(atm2_stl_fit)
+atm2_stl_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Seasonal and Trend decomposition  (STL) with ARIMA
+
+```{r}
+atm2_stl_arima_fit <- ATM2 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE, method = "arima")
+checkresiduals(atm2_stl_arima_fit)
+atm2_stl_arima_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Holt-Winters
+
+```{r}
+atm2_hw_fit <- hw(ATM2, h = 31)
+checkresiduals(atm2_hw_fit)
+atm2_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+### Holt-Winters with Box Cox Adjustment
+
+```{r}
+atm2_lambda <- BoxCox.lambda(ATM2)
+atm2_adj_hw_fit <- hw(ATM2, h = 31, lambda = atm2_lambda)
+checkresiduals(atm2_adj_hw_fit)
+atm2_adj_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### ARIMA
+
+```{r}
+atm2_arima_fit <- auto.arima(ATM2)
+checkresiduals(atm2_arima_fit)
+atm2_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm2_arima_fit))
+```
+
+### ARIMA with Box Cox Adjustment
+
+```{r}
+lambda = BoxCox.lambda(ATM2)
+atm2_box_arima_fit <- auto.arima(ATM2,approximation = F,lambda = lambda)
+checkresiduals(atm2_box_arima_fit)
+atm2_box_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm2_box_arima_fit))
+```
+
+### MODEL EVALUATION
+
+I will use the `tsCV` function and evaluate the models.My goal is to find the model that produces minumum RMSE. 
+
+```{r}
+h <- 31
+get_rmse <- function(error) {
+  sqrt(mean(error^2, na.rm = TRUE))
+}
+atm2_arima_forecast <- function(x, h) {
+  forecast(Arima(x, order = c(2, 0, 2), seasonal = c(0, 1, 2)), h = h)
+}
+residuals_stl <- tsCV(ATM2, stlf, h = h, s.window = 7, robust = TRUE)
+residuals_stl_arima <- tsCV(ATM2, stlf, h = h, s.window = 7, robust = TRUE, method = "arima")
+residuals_hw <- tsCV(ATM2, hw, h = h)
+residuals_arima <- tsCV(ATM2, atm2_arima_forecast, h = h)
+data.frame(Model_Name = c("STL", "STL & ARIMA", "Holt-Winters", "ARIMA"),
+           RMSE = c(get_rmse(residuals_stl[, h]), get_rmse(residuals_stl_arima[, h]), get_rmse(residuals_hw[, h]), get_rmse(residuals_arima[, h]))) %>%
+  arrange(RMSE) %>%
+  kable() %>%
+  kable_styling()
+```
+
+The ARIMA model gives the minumum RMSE among the other models.
+
+### ATM #3
+
+#### Data Cleanup
+
+There are only three missing values in atm_3 data. I will impute the missing values in order to create a timeseries data.
+
+```{r}
+atm3 <- atm_data %>%
+  filter(ATM == "ATM3")
+```
+
+
+Here, I'd like to review the "atm3" timeseries data to determine whether there is a seosanality and ACF and PACF plots.
+
+```{r}
+ATM3 <- atm_data[atm_data$ATM == "ATM3",]
+ATM3 <- ATM3[complete.cases(ATM3),]
+ATM3 <- ts(ATM3[c("Cash")],frequency = 7)
+ggtsdisplay(ATM3, 
+            main = "RAW ATM3",
+            xlab = "DAY",
+            ylab = "CASH")
+```
+
+The ACF plot indicates that observations peak on every 7th lag.I will check Seasonality and Outlier for atm3 data.
+
+#### Outlier and Seasonality 
+
+```{r, warning=FALSE}
+atm3$weekday <- factor(weekdays(as.Date(atm3$DATE)))
+atm3$weekday <- ordered(atm3$weekday,levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
+#drop NaN values
+atm3 <- atm3[complete.cases(atm3),]
+ggplot(atm3[complete.cases(atm3),],aes(x=weekday,y=Cash,color=ATM))+
+  geom_boxplot()+
+  ggtitle("ATM #3 OUTLIER/SEASONALTY PLOT")
+```
+
+**MAKE ANALYSIS**
+
+
+####  Model Creation 
+
+
+I will use following forecating models on this time series and determine which one is better by estimatin error metric RMSE. I will use time series cross validation function to estimate RMSE for timeseries data.
+
+* Seasonal and Trend decomposition (STL) 
+* Seasonal and Trend decomposition  (STL) with ARIMA
+* Holt-Winters
+* Holt-Winters with Box Cox Adjustment
+* ARIMA
+* ARIMA with Box Cox Adjustment
+
+```{r}
+ATM3 <- atm_data[atm_data$ATM == "ATM3",]
+ATM3 <- ATM3[complete.cases(ATM3),]
+ATM3 <- ts(ATM3[c("Cash")],frequency = 7)
+Box.test(diff(ATM3,lag=7), type = "Ljung-Box")
+kpss.test(diff(ATM3,lag=7))
+ggtsdisplay(diff(ATM3,lag=7), 
+            main = "DIFFERENCED ATM3, Lag=7",
+            xlab = "DAY",
+            ylab = "")
+```
+
+The result of KPSS and Box-Cox test indicates that atm1 timeseries is statioanry.
+
+
+#### Seasonal and Trend decomposition (STL) 
+
+```{r}
+atm3_stl_fit <- ATM3 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE)
+checkresiduals(atm3_stl_fit)
+checkresiduals(atm3_stl_fit)
+atm3_stl_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Seasonal and Trend decomposition  (STL) with ARIMA
+
+```{r}
+atm3_stl_arima_fit <- ATM3 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE, method = "arima")
+checkresiduals(atm3_stl_arima_fit)
+atm3_stl_arima_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Holt-Winters
+
+```{r}
+atm3_hw_fit <- hw(ATM3, h = 31)
+checkresiduals(atm3_hw_fit)
+atm3_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+### Holt-Winters with Box Cox Adjustment
+
+```{r}
+atm3_lambda <- BoxCox.lambda(ATM3)
+atm3_adj_hw_fit <- hw(ATM3, h = 31, lambda = atm3_lambda)
+checkresiduals(atm3_adj_hw_fit)
+atm3_adj_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### ARIMA
+
+```{r}
+atm3_arima_fit <- auto.arima(ATM3)
+checkresiduals(atm3_arima_fit)
+atm3_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm3_arima_fit))
+```
+
+### ARIMA with Box Cox Adjustment
+
+```{r}
+lambda = BoxCox.lambda(ATM3)
+atm3_box_arima_fit <- auto.arima(ATM3,approximation = F,lambda = lambda)
+checkresiduals(atm3_box_arima_fit)
+atm3_box_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm3_box_arima_fit))
+```
+
+### MODEL EVALUATION
+
+I will use the `tsCV` function and evaluate the models.My goal is to find the model that produces minumum RMSE. 
+
+```{r}
+h <- 31
+get_rmse <- function(error) {
+  sqrt(mean(error^2, na.rm = TRUE))
+}
+atm1_arima_forecast <- function(x, h) {
+  forecast(Arima(x, order = c(0, 0, 1), seasonal = c(0, 1, 1)), h = h)
+}
+residuals_stl <- tsCV(ATM3, stlf, h = h, s.window = 7, robust = TRUE)
+residuals_stl_arima <- tsCV(ATM3, stlf, h = h, s.window = 7, robust = TRUE, method = "arima")
+residuals_hw <- tsCV(ATM3, hw, h = h)
+residuals_arima <- tsCV(ATM3, atm1_arima_forecast, h = h)
+data.frame(Model_Name = c("STL", "STL & ARIMA", "Holt-Winters", "ARIMA"),
+           RMSE = c(get_rmse(residuals_stl[, h]), get_rmse(residuals_stl_arima[, h]), get_rmse(residuals_hw[, h]), get_rmse(residuals_arima[, h]))) %>%
+  arrange(RMSE) %>%
+  kable() %>%
+  kable_styling()
+```
+
+The ARIMA model gives the minumum RMSE among the other models.
+
+### ATM #4
+
+#### Data Cleanup
+
+There are only three missing values in atm_4 data. I will impute the missing values in order to create a timeseries data.
+
+```{r}
+atm4 <- atm_data %>%
+  filter(ATM == "ATM4")
+```
+
+
+Here, I'd like to review the "atm4" timeseries data to determine whether there is a seosanality and ACF and PACF plots.
+
+```{r}
+ATM4 <- atm_data[atm_data$ATM == "ATM4",]
+ATM4 <- ATM4[complete.cases(ATM4),]
+ATM4 <- ts(ATM4[c("Cash")],frequency = 7)
+ggtsdisplay(ATM4, 
+            main = "RAW ATM4",
+            xlab = "DAY",
+            ylab = "CASH")
+```
+
+The ACF plot indicates that observations peak on every 7th lag.I will check Seasonality and Outlier for atm4 data.
+
+#### Outlier and Seasonality 
+
+```{r, warning=FALSE}
+atm4$weekday <- factor(weekdays(as.Date(atm4$DATE)))
+atm4$weekday <- ordered(atm4$weekday,levels = c("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"))
+#drop NaN values
+atm4 <- atm4[complete.cases(atm4),]
+ggplot(atm4[complete.cases(atm4),],aes(x=weekday,y=Cash,color=ATM))+
+  geom_boxplot()+
+  ggtitle("ATM #4 OUTLIER/SEASONALTY PLOT")
+```
+
+**MAKE ANALYSIS**
+
+
+####  Model Creation 
+
+
+I will use following forecating models on this time series and determine which one is better by estimatin error metric RMSE. I will use time series cross validation function to estimate RMSE for timeseries data.
+
+* Seasonal and Trend decomposition (STL) 
+* Seasonal and Trend decomposition  (STL) with ARIMA
+* Holt-Winters
+* Holt-Winters with Box Cox Adjustment
+* ARIMA
+* ARIMA with Box Cox Adjustment
+
+```{r}
+ATM4 <- atm_data[atm_data$ATM == "ATM4",]
+ATM4 <- ATM4[complete.cases(ATM4),]
+ATM4 <- ts(ATM4[c("Cash")],frequency = 7)
+Box.test(diff(ATM4,lag=7), type = "Ljung-Box")
+kpss.test(diff(ATM4,lag=7))
+ggtsdisplay(diff(ATM4,lag=7), 
+            main = "DIFFERENCED ATM4, Lag=7",
+            xlab = "DAY",
+            ylab = "")
+```
+
+The result of KPSS and Box-Cox test indicates that atm1 timeseries is statioanry.
+
+
+#### Seasonal and Trend decomposition (STL) 
+
+```{r}
+atm4_stl_fit <- ATM4 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE)
+checkresiduals(atm4_stl_fit)
+checkresiduals(atm4_stl_fit)
+atm4_stl_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Seasonal and Trend decomposition  (STL) with ARIMA
+
+```{r}
+atm4_stl_arima_fit <- ATM4 %>%
+  stlf(h = 31, s.window = 7, robust = TRUE, method = "arima")
+checkresiduals(atm4_stl_arima_fit)
+atm4_stl_arima_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### Holt-Winters
+
+```{r}
+atm4_hw_fit <- hw(ATM4, h = 31)
+checkresiduals(atm4_hw_fit)
+atm4_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+### Holt-Winters with Box Cox Adjustment
+
+```{r}
+atm4_lambda <- BoxCox.lambda(ATM4)
+atm4_adj_hw_fit <- hw(ATM4, h = 31, lambda = atm3_lambda)
+checkresiduals(atm4_adj_hw_fit)
+atm4_adj_hw_fit%>% forecast(h=31) %>% autoplot()
+```
+
+
+#### ARIMA
+
+```{r}
+atm4_arima_fit <- auto.arima(ATM4)
+checkresiduals(atm4_arima_fit)
+atm4_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm4_arima_fit))
+```
+
+### ARIMA with Box Cox Adjustment
+
+```{r}
+lambda = BoxCox.lambda(ATM4)
+atm4_box_arima_fit <- auto.arima(ATM4,approximation = F,lambda = lambda)
+checkresiduals(atm4_box_arima_fit)
+atm4_box_arima_fit%>% forecast(h=31) %>% autoplot()
+kpss.test(resid(atm4_box_arima_fit))
+```
+
+### MODEL EVALUATION
+
+I will use the `tsCV` function and evaluate the models.My goal is to find the model that produces minumum RMSE. 
+
+```{r}
+h <- 31
+get_rmse <- function(error) {
+  sqrt(mean(error^2, na.rm = TRUE))
+}
+atm1_arima_forecast <- function(x, h) {
+  forecast(Arima(x, order = c(0, 0, 1), seasonal = c(0, 1, 1)), h = h)
+}
+residuals_stl <- tsCV(ATM4, stlf, h = h, s.window = 7, robust = TRUE)
+residuals_stl_arima <- tsCV(ATM4, stlf, h = h, s.window = 7, robust = TRUE, method = "arima")
+residuals_hw <- tsCV(ATM4, hw, h = h)
+residuals_arima <- tsCV(ATM4, atm1_arima_forecast, h = h)
+data.frame(Model_Name = c("STL", "STL & ARIMA", "Holt-Winters", "ARIMA"),
+           RMSE = c(get_rmse(residuals_stl[, h]), get_rmse(residuals_stl_arima[, h]), get_rmse(residuals_hw[, h]), get_rmse(residuals_arima[, h]))) %>%
+  arrange(RMSE) %>%
+  kable() %>%
+  kable_styling()
+```
+
+The ARIMA model gives the minumum RMSE among the other models.
+
+
+### SUMMARY
+
+```{r}
+atm1_forecast <- atm1_arima_fit %>% forecast(h=31)
+atm2_forecast <- atm2_arima_fit %>% forecast(h=31)
+atm3_forecast <- atm3_arima_fit %>% forecast(h=31)
+atm4_forecast <- atm4_arima_fit %>% forecast(h=31)
+ATM_forecast <- cbind(atm1_forecast$mean,atm2_forecast$mean,atm3_forecast$mean,atm4_forecast$mean)
+colnames(ATM_forecast) <- c("ATM1","ATM2","ATM3","ATM4")
+row.names(ATM_forecast) <- as.Date(seq.Date(as.Date("2010/5/1"),by="day",length.out=31),format = "%Y-%m-%d")
+kable(ATM_forecast)
+write.csv(ATM_forecast,"ATM_predictions.csv")
+```
