@@ -1,0 +1,300 @@
+---
+title: "DATA 624 - Homework 7"
+author: "OMER OZEREN"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+always_allow_html: true    
+---
+Exercises 6.2 & 6.3 
+
+```{r warning = FALSE, message = FALSE}
+library(AppliedPredictiveModeling)
+library(caret)
+library(elasticnet)
+library(knitr)
+library(pls)
+library(ggplot2)
+library(tidyverse)
+library(kableExtra)
+library(RANN)
+library(corrplot)
+```
+
+## Question 6.2
+
+Developing a model to predict permeability (see Sect. 1.4) could save significant
+resources for a pharmaceutical company, while at the same time more
+rapidly identifying molecules that have a sufficient permeability to become a
+drug:
+
+### PART A
+
+Start R and use these commands to load the data:
+
+```{r}
+data(permeability)
+```
+
+
+
+The fingerprints matrix holds **165 unique compounds**; **1107 molecular fingerprints**  
+
+### Part B
+
+the `fingerprints` predictors indicate the presense or absense of substructures of a molecule and are often sparse meaning that relatively few of the molecules contain each substructure.  Filter out the predictors that have low frequencies using the `nearZeroVar` function from the `caret` package.  How many are left for modeling?
+
+```{r, null_prefix=TRUE}
+fingerprints %>%
+  nearZeroVar() %>%
+  length()
+```
+
+**There are `r length(nearZeroVar(fingerprints))` variables left after filtering out the near zero variables.**
+
+
+### Part C
+
+Split the data into a training and a test set, pre-process the data, and tune a PLS model. How many latent variables are optimal and what is the corresponding resampled estimate of R2?
+
+I'm going to split the data 70% for training and 30% for testign.
+
+```{r}
+data_clear <- as.data.frame(fingerprints[, nearZeroVar(fingerprints)]) %>%
+  mutate(y = permeability)
+set.seed(42)
+data_clear <- cbind(data.frame(permeability),data_clear)
+n <-  floor(0.70 * nrow(data_clear))
+idx <- sample(seq_len(nrow(data_clear)), size = n)
+training_df <- data_clear[idx, ]
+testing_df <- data_clear[-idx, ]
+
+# build PLS model
+pls_model <- train(
+  y ~ ., data = training_df, method = "pls",
+  center = TRUE,
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 25
+)
+#results
+plot(pls_model$results$Rsquared,
+     xlab = "ncomp",
+     ylab = "Rsquared"
+     )
+```
+
+
+```{r}
+pls_model$results %>%
+  filter(ncomp == pls_model$bestTune$ncomp) %>%
+  select(ncomp, RMSE, Rsquared) %>%
+  kable() %>%
+  kable_styling()
+```
+
+**As we can see above plot, the optimal components number in model is `r pls_model$bestTune$ncomp`.In addition to that, the PLS model captures `r round(pls_model$results$Rsquared[pls_model$bestTune$ncomp],2)*100`% of the permeability .**
+
+### PART D
+
+Predict the response for the test set. What is the test set estimate of R2?
+
+```{r}
+# Make predictions
+pred <- predict(pls_model, testing_df)
+# Error Metric/Model Evaluation
+results <- data.frame(Model = "PLS Model",
+                      RMSE = caret::RMSE(pred, testing_df$y),
+                      Rsquared = caret::R2(pred, testing_df$y))
+results %>%
+  kable() %>%
+  kable_styling()
+```
+
+**We got the the same  $R^2$ which is `r round(caret::R2(pred, testing_df$y), 2)`.I actually also tried for 80/20 % split.However, I got the the same $R^2$.**
+
+### Part E
+
+Try building other models discussed in this chapter.  Do any have better predictive performance?
+
+
+**I'll use Elastic Net Regression**
+
+#### Elastic Net Regression
+
+```{r}
+data_clear  <- fingerprints[, -nearZeroVar(fingerprints)]
+data_clear <- cbind(data.frame(permeability),data_clear) #adding permeability
+number <-  floor(0.70 * nrow(data_clear)) # 70/30 split
+idx <- sample(seq_len(nrow(data_clear)), size = number)
+train_df <- data_clear[idx, ]
+test_df <- data_clear[-idx, ]
+
+#train the Elastic Net model
+elastic_model <-  train(x=train_df[,-1],
+                 y=train_df$permeability,
+                 method='enet',
+                 metric='RMSE', # error mettric
+                 tuneGrid=expand.grid(.fraction = seq(0, 1, by=0.2), 
+                                      .lambda = seq(0, 1, by=0.2)),
+                 trControl=trainControl(method='cv',number=10),
+                 preProcess=c('center','scale'))
+plot(elastic_model)
+#best params
+elastic_model$bestTune
+#perf of best params
+getTrainPerf(elastic_model)
+```
+
+**As we can see on graph on above $R^2$ declined from 1 to 0.55**
+
+## PART F 
+
+Would you recommend any of your models to replace the permeability laboratory experiment?
+
+**No, it is  obvious that the predictive power from Elastic Net Regression is not as good as the laboratory experiment.**
+
+## Question 6.3
+
+A chemical manufacturing process for a pharmaceutical product was discussed in Sect. 1.4. In this problem, the objective is to understand the relationship between biological measurements of the raw materials (predictors), 6.5 Computing 139
+measurements of the manufacturing process (predictors), and the response of
+product yield. Biological predictors cannot be changed but can be used to
+assess the quality of the raw material before processing. On the other hand,
+manufacturing process predictors can be changed in the manufacturing process.
+Improving product yield by 1% will boost revenue by approximately
+one hundred thousand dollars per batch:
+
+
+### PART A 
+
+Start R and use these commands to load the data:
+
+```{r}
+data(ChemicalManufacturingProcess)
+chem <- ChemicalManufacturingProcess
+head(chem)
+```
+
+The matrix `ChemicalManufacturingProcess` has the 57 explanatory  variable 
+
+* 12 of 57 explanatory  variable is  biological material and 
+* 45 of 57 explanatory variable is the process variable for the 176 manufacturing purposes. 
+
+### Part B
+
+A small percentage of cells in the predictor set contain missing values.  Use an imputation function to fill in these missing values (e.g., see Sect. 3.8).
+
+**I will imputer missing values with KNN to impute values.**
+
+```{r}
+# Make this reproducible
+set.seed(42)
+knn_model <- preProcess(ChemicalManufacturingProcess, "knnImpute")
+df_no_missing <- predict(knn_model, ChemicalManufacturingProcess)
+```
+
+### PART C 
+
+Split the data into a training and a test set, pre-process the data, and tune a model of your choice from this chapter. What is the optimal value of the performance metric?
+
+**I will split the data 70/30 the same as question 6.2 part c**
+
+```{r}
+number <-  floor(0.70 * nrow(df_no_missing)) # 70/30 split
+idx <- sample(seq_len(nrow(df_no_missing)), size = number)
+training_df <- df_no_missing[idx, ]
+testing_df <- df_no_missing[-idx, ]
+```
+
+I will buila PLS model since I got really good results for question 6.2
+
+```{r}
+# build PLS model
+pls_model <- train(
+  Yield  ~ ., data = training_df, method = "pls",
+  center = TRUE,
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 25
+)
+#pls model results
+plot(pls_model$results$Rsquared,
+     xlab = "ncomp",
+     ylab = "Rsquared"
+     )
+```
+
+
+```{r}
+pls_model$results %>%
+  filter(ncomp == pls_model$bestTune$ncomp) %>%
+  select(ncomp, RMSE, Rsquared) %>%
+  kable() %>%
+  kable_styling()
+```
+
+**As we can see above plot, the optimal components number in model is `r pls_model$bestTune$ncomp`.In addition to that, the PLS model captures `r round(pls_model$results$Rsquared[pls_model$bestTune$ncomp],2)*100`% of the Yield .**
+
+
+### PART D
+
+Predict the response for the test set.What is the value of the performance metric and how does this compare with the resampled performance metric on the training set?
+
+
+```{r}
+# Make predictions
+pred <- predict(pls_model, testing_df)
+# Error Metric/Model Evaluation
+results <- data.frame(Model = "PLS Model",
+                      RMSE = caret::RMSE(pred, testing_df$Yield),
+                      Rsquared = caret::R2(pred, testing_df$Yield))
+results %>%
+  kable() %>%
+  kable_styling()
+```
+
+
+**As we see above display, the error metric RMSE is lower and $R^2$  is higher with test data set.**
+
+
+### Part E
+
+Which predictors are most important in the model you have trained?  Do either the biological or process predictors dominate the list?
+
+```{r}
+pls_importance <- varImp(pls_model)$importance %>%
+  as.data.frame() %>%
+  rownames_to_column("Variable") %>%
+  filter(Overall >= 50) %>% # set a threshold for vairables importance
+  arrange(desc(Overall)) %>%
+  mutate(importance = row_number())
+varImp(pls_model) %>%
+  plot(., top = max(pls_importance$importance), main = "PLS Model Feature Importance")
+```
+
+**The PLS Model Feature importances indicates that ManufacturingProcess32 is the most importance variable for the PL model.In order to move forward, We can set a threshold and only pass the variables that threshold.Here I set a threshold as at least 50 % importance for PLS  model.**
+
+### Part F
+
+Explore the relationships between each of the top predictors and the response.  How could this information be helpful in improving yield in future rounds of the manufacturing process?
+
+```{r}
+important_vars <- df_no_missing %>%
+  select_at(vars(Yield, pls_importance$Variable))
+
+important_vars_p <- cor.mtest(important_vars)$p
+important_vars %>%
+  cor() %>%
+  corrplot(method = "color", type = "lower", order = "hclust",
+           tl.cex = 0.8, tl.col = "black", tl.srt = 45,
+           addCoef.col = "black", number.cex = 0.7,
+           p.mat = important_vars_p,  sig.level = 0.05, diag = FALSE)
+```
+
+**The purpose of relationship between each of the top predictors and the response, I plotted the corrrelation relations for each important variable to respond variable.The correlation heat map shows that variables are positively correleted with Yield respond.The Manufacuring process 32 is the most correleted variable to respond variable.Some variables are negatively correleted to othe explanatory variable.For example, Manufacuring process 32 is  negatively correlated with manufacturing process 13.**
+
