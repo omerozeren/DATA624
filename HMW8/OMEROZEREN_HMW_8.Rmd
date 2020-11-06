@@ -1,0 +1,223 @@
+---
+title: "DATA 624 - Homework 8"
+author: "OMER OZEREN"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+always_allow_html: yes
+---
+Exercises 7.2 & 7.5  from the K&J book. 
+
+```{r warning = FALSE, message = FALSE}
+library(mlbench)
+library(caret)
+library(earth)
+library(kernlab)
+library(nnet)
+library(ggplot2)
+library(mice)
+library(AppliedPredictiveModeling)
+library(magrittr)  
+library(corrplot)
+library(PerformanceAnalytics)
+```
+
+## 7.2
+
+### Load Data
+
+```{r}
+set.seed(42)
+trainingData <- mlbench.friedman1(200, sd = 1)
+trainingData$x <- data.frame(trainingData$x)
+featurePlot(trainingData$x, trainingData$y)
+testData <- mlbench.friedman1(5000, sd = 1)
+testData$x <- data.frame(testData$x)
+```
+
+Let's tune several model by using GridSearch 
+
+```{r}
+evaluation = function(method, gridSearch = NULL)
+{
+  Model = train(x = trainingData$x, y = trainingData$y, method = method, tuneGrid = gridSearch, preProcess = c('center', 'scale'), trControl = trainControl(method='cv'))
+  Pred = predict(Model, newdata = testData$x)
+  performance = postResample(Pred, testData$y)
+  print(performance)
+}
+```
+
+
+### KNN Model Performace 
+
+```{r}
+knn_rst = evaluation('knn')
+```
+
+### Neural Net Perforance
+
+```{r}
+nnetGrid = expand.grid(decay = c(0,0.01, .1), size = c(1:10))
+net_rst = evaluation('nnet', nnetGrid)
+```
+
+### SVM Performace
+
+```{r}
+library(mlbench)
+svm_rst = evaluation('svmRadial')
+```
+
+### MARS Performance 
+
+```{r}
+marsGrid = expand.grid(degree = 1:2, nprune = 2:15)
+mars_rst = evaluation('earth', marsGrid)
+```
+
+```{r}
+df_performance = rbind(data.frame(Name = 'KNN', RMSE = knn_rst[1]), data.frame(Name= 'Neural Network', RMSE = net_rst[1]) , data.frame(Name = 'SVM', RMSE =svm_rst[1]), data.frame(Name = 'MARS', RMSE = mars_rst[1]))
+ggplot() +
+  geom_bar(data = df_performance, aes(x = Name, y = RMSE, fill=Name), stat="identity")
+```
+
+### Which models appear to give the best performance?
+
+**As we can see from above graph, The MARS model outpreform amnong all the other models.The model performance metric RMSE gives minimum result for MARS model.**
+
+
+
+### Does MARS select informative predictors (those named X1-X5)
+
+```{r}
+marsGrid = expand.grid(degree = 1:2, nprune = 2:15)
+MARSModel = train(x = trainingData$x, y = trainingData$y, method = 'earth', tuneGrid = marsGrid, preProcess = c('center', 'scale'), trControl = trainControl(method='cv'))
+varImp(MARSModel)
+```
+
+**The graph at above shows ranking /feature importance results for variables X1- X5.As we can review X4 (100) is highest ranked feaure,next X1 (63.04), X2 (40.92), X5 (18.90) nad X3 (0.00)**
+
+## 7.5
+
+Exercise 6.3 describes data for a chemical manufacturing process. Use
+the same data imputation, data splitting, and pre-processing steps as before
+and train several nonlinear regression models.
+
+### Prepare Data
+
+```{r}
+set.seed(42) 
+data(ChemicalManufacturingProcess)
+chem_data <- ChemicalManufacturingProcess
+chem_imputed <- preProcess(chem_data[,2:ncol(chem_data)], method=c('knnImpute')) # KNN imputation for NaN values
+chem_data <- cbind(chem_data$Yield,predict(chem_imputed, chem_data[,2:ncol(chem_data)]))
+colnames(chem_data)[1] <- "Yield"
+#split  train and test data into 70/30
+n <-  floor(0.70 * nrow(chem_data))
+idx <- sample(seq_len(nrow(chem_data)), size = n)
+train <- chem_data[idx, ]
+test <- chem_data[-idx, ]
+```
+
+### Model Evaluation Function
+```{r}
+evaluation = function(method, gridSearch = NULL)
+{
+  Model = train(x = train[,-1], y = train$Yield, method = method, tuneGrid = gridSearch, preProcess = c('center', 'scale'), trControl = trainControl(method='cv'))
+  Pred = predict(Model, newdata = test[,-1])
+  performance = postResample(Pred,  test$Yield)
+  print(performance)
+}
+```
+
+### KNN Model Performace 
+
+```{r}
+knn_rst = evaluation('knn')
+```
+
+### Neural Net Perforance
+
+```{r}
+nnetGrid = expand.grid(decay = c(0,0.01, .1), size = c(1:10))
+net_rst = evaluation('nnet', nnetGrid)
+```
+
+### SVM Performace
+
+```{r}
+library(mlbench)
+svm_rst = evaluation('svmRadial')
+```
+
+### MARS Performance 
+
+```{r}
+marsGrid = expand.grid(degree = 1:2, nprune = 2:15)
+mars_rst = evaluation('earth', marsGrid)
+```
+
+```{r}
+df_performance= rbind(data.frame(Name = 'KNN', RMSE = knn_rst[1]), data.frame(Name= 'Neural Network', RMSE = net_rst[1]) , data.frame(Name = 'SVM', RMSE = svm_rst[1]), data.frame(Name = 'MARS', RMSE = mars_rst[1]))
+ggplot(data =df_performance, aes(x = Name, y = RMSE, fill=Name)) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  geom_text(aes(label=RMSE), vjust=1, color="white",
+            position = position_dodge(0.9), size=3.5)
+```
+
+### A
+
+Which nonlinear regression model gives the optimal resampling and test set performance?
+
+#### ANS :
+
+As we can see from above graph, The MARS model outperform among all the other models.The model performance metric RMSE gives minimum result for MARS  model.
+
+### B
+
+Which predictors are most important in the optimal nonlinear regression model? Do either the biological or process variables dominate the list? How do the top ten important predictors compare to the top ten predictors from the optimal linear model?
+
+```{r}
+marsGrid = expand.grid(degree = 1:2, nprune = 2:38)
+MARSModel = train(x = train[,-1], y = train$Yield, method = 'earth', tuneGrid = marsGrid, preProcess = c('center', 'scale'), trControl = trainControl(method='cv'))
+varImp(MARSModel)
+```
+
+#### ANS: 
+
+The graph on above shows aus Neural Network model's top best features.
+
+The Neural Network models (Which performs the best among the other models) gives us most important features as ranked above graph. The Neural Network models says that the most important feaute is ManufacturingProcess32 (100), and next ManufacturingProcess09 (32.62) 
+,ManufacturingProcess13 (0.00).
+
+
+```{r}
+summary(MARSModel)
+```
+
+
+### C
+
+Explore the relationships between the top predictors and the response for the predictors that are unique to the optimal nonlinear regression model. Do these plots reveal intuition about the biological or process predictors and their relationship with yield?
+
+#### ANS: 
+
+I'm going to plot correlation plot to see relationships
+
+```{r echo=FALSE}
+
+train %>% dplyr::select(BiologicalMaterial10, ManufacturingProcess17, ManufacturingProcess32, ManufacturingProcess05, BiologicalMaterial02, ManufacturingProcess09, BiologicalMaterial06, ManufacturingProcess06, ManufacturingProcess13, ManufacturingProcess42) %>%
+  chart.Correlation(histogram=TRUE, pch=19, method = 'pearson')
+  
+```
+
+The graph above shows top 10 important features correlation with target varianle "Yield". As we can in graph above, there are variables that have non-linear realtionship with target variable "Yield".In addition to that, there are also variables that have linear correlationship with "Yield" target variable.
+
+

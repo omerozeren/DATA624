@@ -1,0 +1,175 @@
+---
+title: "DATA 624 - Homework 9"
+author: "OMER OZEREN"
+output:
+  html_document:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+always_allow_html: yes
+---
+
+Exercises 8.1,8.2,8.3 & 8.7  from the K&J book. 
+
+```{r warning = FALSE, message = FALSE}
+library(knitr)
+library(tidyr)
+library(AppliedPredictiveModeling)
+library(mlbench)
+library(ggplot2)
+library(mice)
+library(caret)
+library(Cubist)
+library(gbm)
+library(ipred)
+library(party)
+library(partykit)
+library(randomForest)
+library(rpart)
+library(vip)
+data(solubility)
+```
+
+## 8.1 Recreate the simulated data from Exercise 7.2
+
+### Load data
+
+
+```{r}
+library(mlbench)
+set.seed(200)
+simulated <- mlbench.friedman1(200, sd = 1)
+simulated <- cbind(simulated$x, simulated$y)
+simulated <- as.data.frame(simulated)
+colnames(simulated)[ncol(simulated)] <- "y"
+```
+
+### a) 
+
+Fit a random forest model to all of the predictors, then estimate the variable importance scores: Did the random forest model significantly use the uninformative predictors $(V6 - V10)$?
+
+```{r}
+rf_model1 <- randomForest(y ~ ., data = simulated,
+                       importance = TRUE,
+                       ntree = 1000)
+rf_Imp1 <- rf_model1$importance 
+vip(rf_model1, color = 'red', fill='red') + 
+  ggtitle('RF Model Feature Importance')
+```
+
+The graph above shows feature importance that resulted from Random Forest. According to graph above, Tandom forest model didn't use the uninformative predictors $(V6 - V10)$
+
+
+### b) 
+
+Now add an additional predictor that is highly correlated with one of the informative predictors. For example:
+
+```{r}
+simulated$duplicate1 <- simulated$V1 + rnorm(200) * .1
+cor(simulated$duplicate1, simulated$V1)
+```
+
+### Fit another random forest model to these data. Did the importance score for V1 change? What happens when you add another predictor that is also highly correlated with V1
+
+```{r}
+rf_model2 <- randomForest(y ~ ., data = simulated, 
+                       importance = TRUE, 
+                       ntree = 1000)
+rfImp2 <- varImp(rf_model2, scale = FALSE)
+grid.arrange(vip(rf_model1, color = 'red', fill='red') + 
+  ggtitle('RF Model1 Feature  Importance'), vip(rf_model2, color = 'green', fill='green') + 
+  ggtitle('RF Model2 Feature  Importance'), ncol = 2)
+```
+
+Adding high correlated feature in model, makes change in feature importances for model.The first model says that most important feature is V1 but adding additional highly correlated variable, made V4 the most important variable.
+
+### c) 
+
+Use the cforest function in the party package to fit a random forest model using conditional inference trees. The party package function varimp can calculate predictor importance. The conditional argument of that function toggles between the traditional importance measure and the modified version described in Strobl et al. (2007). Do these importances show the same pattern as the traditional random forest model?
+
+```{r}
+rf_model3 <- cforest(y ~ ., data = simulated, ntree = 100)
+cfImp3 <- varimp(rf_model3, conditional = TRUE)
+cfImp4 <- varimp(rf_model3, conditional = FALSE)
+barplot(sort(cfImp3),horiz = TRUE, main = 'Conditional', col = rainbow(3))
+barplot(sort(cfImp4),horiz = TRUE, main = 'Un-Conditional', col = rainbow(5))
+```
+
+The graph above shows that conditional and un-conditional inference tress also ingnores $V6-V10$ 
+
+### d) 
+
+Repeat this process with different tree models, such as boosted trees and Cubist. Does the same pattern occur?
+
+First, I will use Cubist model
+
+```{r}
+cubist_model <- cubist(x = simulated[, names(simulated)[names(simulated) != 'y']], 
+                 y = simulated[,c('y')])
+
+cubist_Imp4 <- varImp(cubist_model, conditional = TRUE) # Conditional variable importance
+cubist_Imp5 <- varImp(cubist_model, conditional = FALSE) # Un-conditional variable importance
+barplot((t(cubist_Imp4)),horiz = TRUE, main = 'Conditional', col = rainbow(3))
+barplot((t(cubist_Imp5)),horiz = TRUE, main = 'Un-Conditional', col = rainbow(5))
+
+```
+
+Next, I will use Boosted Trees
+
+```{r}
+gbmGrid = expand.grid(interaction.depth = seq(1,5, by=2), n.trees = seq(100, 1000, by = 100), shrinkage = 0.1, n.minobsinnode = 5)
+cubist_model <- train(y ~ ., data = simulated, tuneGrid = gbmGrid, verbose = FALSE, method = 'gbm' )
+cubist_Imp4 <- varImp(cubist_model, conditional = TRUE) # Conditional variable importance
+cubist_Imp5 <- varImp(cubist_model, conditional = FALSE) # Un-conditional variable importance
+barplot((t(cubist_Imp4$importance)),horiz = TRUE, main = 'Conditional', col = rainbow(3))
+barplot((t(cubist_Imp5$importance)),horiz = TRUE, main = 'Un-Conditional', col = rainbow(5))
+```
+
+The feature importances for cubist model and GBM model with Conditional and Un-conditional is the same.
+
+## 8.2 
+
+Use a simulation to show tree bias with different granularities.
+
+```{r}
+V1 <- runif(500, 2,500)
+V2 <- rnorm(500, 2,10)
+V3 <- rnorm(500, 1,1000)
+y <- V2 + V3
+df <- data.frame(V1, V2, V3, y)
+test_model <- cforest(y ~ ., data = df, ntree = 10)
+test_model_imp <- varimp(test_model, conditional = FALSE)
+barplot(sort(test_model_imp),horiz = TRUE, main = 'Un-Conditional', col = rainbow(5))
+```
+
+Random Forest model's the most important varianle is significantly V3.But remember we are using function of y <- V2 + V3
+
+## 8.3 
+
+In stochastic gradient boosting the bagging fraction and learning rate will govern the construction of the trees as they are guided by the gradient.
+
+### a) 
+
+Why does the model on the right focus its importance on just the first few of predictors, whereas the model on the left spreads importance across more predictors?
+
+The learning rate is a hyperparameter that controls how much to change the model in response to the estimated error each time the model weights are updated.The learning rate may be the most important hyperparameter when configuring your neural network. Therefore it is vital to know how to investigate the effects of the learning rate on model performance and to build an intuition about the dynamics of the learning rate on model behavior.The larger learning rates result in rapid changes and require fewer training epochs.(References :https://machinelearningmastery.com/understand-the-dynamics-of-learning-rate-on-deep-learning-neural-networks/)
+
+The model on right have significant learning rate.The model on right is trained high fraction rate(0.9).It takes more variables to learn from it.
+
+### b)
+
+Which model do you think would be more predictive of other samples?
+
+I believe model on left would be more predictive of other sample. I also believe that model on right will face the overfitting problem.I persoanlly think that using bagging models with weak learners would predict better.
+
+### c) 
+
+How would increasing interaction depth affect the slope of predictor importance for either model in Fig. 8.24?
+
+The increase in depth in tree, will result the tree to grow deeper.The model would consider more and more variable to consider in the fianl tree model.
+
+## 8.7 
+Refer to Exercises 6.3 and 7.5 which describe a chemical manufacturing process. Use the same data imputation, data splitting, and pre-processing steps as before and train several tree-based models:
+
