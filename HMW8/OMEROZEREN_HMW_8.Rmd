@@ -2,9 +2,6 @@
 title: "DATA 624 - Homework 8"
 author: "OMER OZEREN"
 output:
-  word_document:
-    toc: yes
-    toc_depth: '5'
   html_document:
     highlight: tango
     theme: journal
@@ -13,7 +10,7 @@ output:
     toc_float: yes
 always_allow_html: yes
 ---
-Exercises 7.2 & 7.5  from the K&J book. 
+Exercises 7.2 & 7.5 
 
 ```{r warning = FALSE, message = FALSE}
 library(mlbench)
@@ -42,7 +39,7 @@ testData <- mlbench.friedman1(5000, sd = 1)
 testData$x <- data.frame(testData$x)
 ```
 
-Let's tune several model by using GridSearch 
+Let's tune model parameters by using GridSearch 
 
 ```{r}
 evaluation = function(method, gridSearch = NULL)
@@ -90,7 +87,7 @@ ggplot() +
 
 ### Which models appear to give the best performance?
 
-**As we can see from above graph, The MARS model outpreform amnong all the other models.The model performance metric RMSE gives minimum result for MARS model.**
+**As we can see from above graph, The MARS model outpreform among all the other models.The model performance metric RMSE gives minimum result for MARS model.**
 
 
 
@@ -127,6 +124,7 @@ test <- chem_data[-idx, ]
 ```
 
 ### Model Evaluation Function
+
 ```{r}
 evaluation = function(method, gridSearch = NULL)
 {
@@ -176,7 +174,7 @@ ggplot(data =df_performance, aes(x = Name, y = RMSE, fill=Name)) +
 
 Which nonlinear regression model gives the optimal resampling and test set performance?
 
-#### ANS :
+#### ANSWER :
 
 As we can see from above graph, The MARS model outperform among all the other models.The model performance metric RMSE gives minimum result for MARS  model.
 

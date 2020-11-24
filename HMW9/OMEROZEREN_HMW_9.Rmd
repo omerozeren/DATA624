@@ -11,7 +11,7 @@ output:
 always_allow_html: yes
 ---
 
-Exercises 8.1,8.2,8.3 & 8.7  from the K&J book. 
+Exercises 8.1, 8.2, 8.3, and 8.7 in Kuhn and Johnson. 
 
 ```{r warning = FALSE, message = FALSE}
 library(knitr)
@@ -29,6 +29,8 @@ library(partykit)
 library(randomForest)
 library(rpart)
 library(vip)
+library(dplyr)
+library(rattle)
 data(solubility)
 ```
 
@@ -59,7 +61,7 @@ vip(rf_model1, color = 'red', fill='red') +
   ggtitle('RF Model Feature Importance')
 ```
 
-The graph above shows feature importance that resulted from Random Forest. According to graph above, Tandom forest model didn't use the uninformative predictors $(V6 - V10)$
+The graph above shows feature importances that resulted from Random Forest. According to graph above, Random forest model didn't use the uninformative predictors $(V6 - V10)$
 
 
 ### b) 
@@ -119,8 +121,8 @@ barplot((t(cubist_Imp5)),horiz = TRUE, main = 'Un-Conditional', col = rainbow(5)
 Next, I will use Boosted Trees
 
 ```{r}
-gbmGrid = expand.grid(interaction.depth = seq(1,5, by=2), n.trees = seq(100, 1000, by = 100), shrinkage = 0.1, n.minobsinnode = 5)
-cubist_model <- train(y ~ ., data = simulated, tuneGrid = gbmGrid, verbose = FALSE, method = 'gbm' )
+grid_params = expand.grid(interaction.depth = seq(1,5, by=2), n.trees = seq(100, 150, by = 10), shrinkage = 0.1, n.minobsinnode = 5)
+cubist_model <- train(y ~ ., data = simulated, tuneGrid = grid_params, verbose = FALSE, method = 'gbm' )
 cubist_Imp4 <- varImp(cubist_model, conditional = TRUE) # Conditional variable importance
 cubist_Imp5 <- varImp(cubist_model, conditional = FALSE) # Un-conditional variable importance
 barplot((t(cubist_Imp4$importance)),horiz = TRUE, main = 'Conditional', col = rainbow(3))
@@ -144,7 +146,7 @@ test_model_imp <- varimp(test_model, conditional = FALSE)
 barplot(sort(test_model_imp),horiz = TRUE, main = 'Un-Conditional', col = rainbow(5))
 ```
 
-Random Forest model's the most important varianle is significantly V3.But remember we are using function of y <- V2 + V3
+Random Forest model's the most important variable is significantly V3 based on using function of y <- V2 + V3
 
 ## 8.3 
 
@@ -156,20 +158,142 @@ Why does the model on the right focus its importance on just the first few of pr
 
 The learning rate is a hyperparameter that controls how much to change the model in response to the estimated error each time the model weights are updated.The learning rate may be the most important hyperparameter when configuring your neural network. Therefore it is vital to know how to investigate the effects of the learning rate on model performance and to build an intuition about the dynamics of the learning rate on model behavior.The larger learning rates result in rapid changes and require fewer training epochs.(References :https://machinelearningmastery.com/understand-the-dynamics-of-learning-rate-on-deep-learning-neural-networks/)
 
-The model on right have significant learning rate.The model on right is trained high fraction rate(0.9).It takes more variables to learn from it.
+The model on right have significant learning rate.The model on right is trained high fraction rate (0.9).It takes more variables to learn from it.
 
 ### b)
 
 Which model do you think would be more predictive of other samples?
 
-I believe model on left would be more predictive of other sample. I also believe that model on right will face the overfitting problem.I persoanlly think that using bagging models with weak learners would predict better.
+I believe model on left would be more predictive of other sample. I also believe that model on right will face the overfitting problem.I think that using bagging models with weak learners would predict better.
 
 ### c) 
 
 How would increasing interaction depth affect the slope of predictor importance for either model in Fig. 8.24?
 
-The increase in depth in tree, will result the tree to grow deeper.The model would consider more and more variable to consider in the fianl tree model.
+The increase in depth in tree, will result the tree to grow deeper.The model would consider more and more variable to consider in the final tree model.
 
 ## 8.7 
+
 Refer to Exercises 6.3 and 7.5 which describe a chemical manufacturing process. Use the same data imputation, data splitting, and pre-processing steps as before and train several tree-based models:
 
+```{r}
+library(AppliedPredictiveModeling)
+data(ChemicalManufacturingProcess)
+
+# using Knn imputation
+knn_model <- preProcess(ChemicalManufacturingProcess, "knnImpute")
+df <- predict(knn_model, ChemicalManufacturingProcess)
+df <- df %>%
+  select_at(vars(-one_of(nearZeroVar(., names = TRUE))))
+in_train <- createDataPartition(df$Yield, times = 1, p = 0.8, list = FALSE)
+
+#split data in train and test samples
+train_df <- df[in_train, ]
+test_df <- df[-in_train, ]
+```
+
+I'll use multiple tree-based models
+
+### Bagged Model 
+
+```{r}
+set.seed(42)
+bag_setup = bagControl(fit = ctreeBag$fit, predict = ctreeBag$pred, aggregate = ctreeBag$aggregate)
+bag_model_fit <- train(Yield ~ ., data = train_df, method="bag", bagControl = bag_setup,
+                   center = TRUE,
+                   scale = TRUE,
+                   trControl = trainControl("cv", number = 10),importance = "permutation",
+                   tuneLength = 25)
+bag_pred <- predict(bag_model_fit, test_df)
+bag_results<- merge(bag_model_fit$results, bag_model_fit$bestTune)
+bag_model_fit
+```
+
+### Random Forest
+
+```{r }
+set.seed(42)
+rf_model_fit <- train(Yield ~ ., data = train_df, method = "ranger", 
+                  scale = TRUE,
+                  trControl = trainControl("cv", number = 10),importance = "permutation",
+                  tuneLength = 25)
+rf_pred <- predict(rf_model_fit, test_df)
+rf_results<- merge(rf_model_fit$results, rf_model_fit$bestTune)
+rf_model_fit
+```
+
+### GBM Model with Grid Search Parameters
+
+```{r}
+grid_params <- expand.grid(n.trees=c(50, 100), 
+                    interaction.depth=c(1, 5, 10), 
+                    shrinkage=c(0.01, 0.1, 0.2), 
+                    n.minobsinnode=c(5, 10))
+gmb_model_fit<- train(Yield ~.,
+                  data = train_df, 
+                  method = 'gbm', 
+                  tuneGrid = grid_params,
+                  verbose = FALSE)
+gmb_pred <- predict(gmb_model_fit, test_df)
+gmb_results<- merge(gmb_model_fit$results, gmb_model_fit$bestTune)
+gmb_model_fit
+```
+
+Let's review **in-sample** results of eact tree-based model
+
+```{r}
+insample_results <- data.frame(rbind(getTrainPerf(bag_model_fit),
+                                  getTrainPerf(rf_model_fit),
+                                  getTrainPerf(gmb_model_fit)))
+row.names(insample_results) <- c("Bagging", "RandomForest","GBM")
+insample_results
+```
+
+Let's review **out-sample** results of eact tree-based model
+
+```{r}
+outsample_results <- data.frame(rbind(postResample(pred = bag_pred, obs = test_df$Yield),
+                        postResample(pred = rf_pred, obs = test_df$Yield),
+                        postResample(pred = gmb_pred, obs = test_df$Yield)))
+row.names(outsample_results) <- c("Bagging", "RandomForest","GBM")
+outsample_results
+```
+### a) Which tree-based regression model gives the optimal resampling and test set performance?
+
+The best model in insample test is GBM model (0.64) and The best model in outsample test is also GBM model (0.57)
+
+### b) Which predictors are most important in the optimal tree-based regression model? Do either the biological or process variables dominate the list? How do the top 10 important predictors compare to the top 10 predictors from the optimal linear and nonlinear models?
+
+```{r}
+
+plot(varImp(gmb_model_fit),
+     top=10,
+     main="Feature Importance with GBM Model")
+
+plot(varImp(rf_model_fit),
+     top=10,
+     main="Feature Importance with Random Forest Model")
+
+plot(varImp(bag_model_fit),
+     top=10,
+     main="Feature Importance with Bagging Model")
+```
+
+The plots above indicate that best model (GBM)'s most importantant variable is Process32 and remaning majority variables are belong to manufactoring category.The three tree-based model says thatAManufactoringProcess32 is significantly most important variable. 
+
+### Part C
+
+Plot the optimal single tree with the distribution of yield in the terminal nodes.  Does this view of the data provide additional knowledge about the biological or process predictors and their relationship with yield?
+
+
+```{r }
+set.seed(42)
+library(rpart)
+model <- train(Yield ~ ., data = train_df, method = "rpart",
+                    trControl = trainControl("cv", number = 10),
+                    tuneLength = 25)
+
+fancyRpartPlot(model$finalModel, sub="", palettes=c("Greys", "Oranges"))
+```
+
+I found fancyRpartPlot from website https://rdrr.io/cran/rattle/man/fancyRpartPlot.html. The plot looks like does its job.The plot indicates that majority feature importances are dominated by  manufacturing .
