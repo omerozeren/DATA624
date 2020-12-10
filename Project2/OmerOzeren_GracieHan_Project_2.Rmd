@@ -37,6 +37,21 @@ library(writexl)
 library(psych)
 ```
 
+### Load the Evaluation Data
+```{r, load-Evaluationdata}
+temp_file <- tempfile(fileext = ".xlsx")
+download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master/Project2/StudentEvaluation.xlsx", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+#load xl from temp
+df_eval <- data.frame(readxl::read_excel(temp_file,skip=0))
+```
+
+The data set contains 267 observations and 33 variables. The variable name BrandCode is a character variable, the remaining variables are numeric. PH is the respond variable 
+
+
+
 ### Load the Train Data
 
 ```{r, load-traindata}
@@ -46,8 +61,10 @@ download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master
               mode = "wb", 
               quiet = TRUE)
 #load xl from temp
-df_train <- readxl::read_excel(temp_file,skip=0)
+df_train <- data.frame(readxl::read_excel(temp_file,skip=0))
 ```
+
+
 
 ### Train Data Statistics
 
@@ -78,7 +95,22 @@ kable(describe(df_train)[,-c(1,6,7,13)],
       digit = 2L)
 ```
 
+
+#### Visualization of Target Variable (pH)
+
+
+```{r}
+df_train %>%
+  ggplot(aes(PH, fill = PH > 8.5)) + 
+  geom_histogram(bins = 30) +
+  theme_bw() +
+  theme(legend.position = 'center') +
+  labs(y = 'Count', title = 'PH histogram') 
+```
+
+
 **GRACIEHAN's comments**
+
 
 ### Visualization of Predictors
 
@@ -114,7 +146,7 @@ This plot below indicates relationship between target and explanantory variables
 
 ```{r message = F}
 df_train %>% 
-  gather(-PH, -BrandCode, key="Var", value="Value") %>% 
+  gather(-PH, -Brand.Code, key="Var", value="Value") %>% 
   ggplot(aes(x=PH, y=Value)) +
   geom_point(alpha=0.01, col = "blue") +
   facet_wrap(~ Var, scales = "free", ncol=6)
@@ -134,7 +166,7 @@ corrplot::corrplot(cor(df_train[,-1], use = 'complete.obs'),
 Correlation plot above indicates that some explanantory variables are correleted each other. We find out explanantory variables that hig correleted each other by using findCorrelation() with using threshold as 0.6.
 
 ```{r message = F}
-df_train_cor <- cor(df_train %>% select( -BrandCode), use="complete.obs")
+df_train_cor <- cor(df_train %>% select( -Brand.Code), use="complete.obs")
 findCorrelation(df_train_cor, .6, names = TRUE)
 ```
 
@@ -162,15 +194,14 @@ top_df_train_cor %>%
 **GRACIEHAN's comments**
 
 
-## Near Zero Variance Predictors
+### Near Zero Variance Predictors
 
 ```{r}
 non_zero <- nearZeroVar(df_train)
 colnames(df_train[,non_zero])
 ```
 
-"Hyd Pressure1" should be removed from the dataset isce it hold constant values.
-
+"Hyd.Pressure1" should be removed from the dataset since it hold constant values.WE are going to handle this in Model Data PreProcessing part
 
 
 ### Missing Values
@@ -185,63 +216,104 @@ aggr(df_train, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=name
 
 **GRACIEHAN's comments**
 
-```{r message = F}
+
+## Modeling Data PreProcessing
+
+```{r impute}
+# Train set
 imputer<-mice(df_train, method = "rf", print = FALSE, seed = 143)
-ph_data <-complete(imputer)
-summary(ph_data)
+df_train_imputed <-complete(imputer)
+features = nearZeroVar(df_train_imputed)
+df_model_train = df_train_imputed[,-features]
+# Eval set
+imputer<-mice(df_eval, method = "rf", print = FALSE, seed = 143)
+df_eval_imputed <-complete(imputer)
+features = nearZeroVar(df_eval_imputed)
+df_model_eval = df_t_imputed[,-features]
+summary(df_model_train)
 ```
 
 
 
+**GRACIEHAN's comments**
 
+### Splitting Data Set
 
+Splitting dataset into training and test sets.
 
-
-
-
-
-
-
-
-### Load the Evaluation Data
-```{r, load-Evaluationdata}
-temp_file <- tempfile(fileext = ".xlsx")
-download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master/Project2/StudentEvaluation.xlsx", 
-              destfile = temp_file, 
-              mode = "wb", 
-              quiet = TRUE)
-#load xl from temp
-df_eval <- readxl::read_excel(temp_file,skip=0)
+```{r, message=FALSE}
+set.seed(123)
+training.samples <- df_model_train$PH %>%
+createDataPartition(p = 0.8, list = FALSE)
+train_data  <- df_model_train[training.samples, ]
+test_data <- df_model_train[-training.samples, ]
 ```
 
-The data set contains 267 observations and 33 variables. The variable name BrandCode is a character variable, the remaining variables are numeric. PH is the respond variable 
+## Model Building  & Evaluation
 
-### Evaluation Data Statistics
+### Linear Regression  Model
 
 ```{r}
-dim(df_eval)
+set.seed(seed)
+log_model <- lm(PH~.,data = train_data)
+summary(log_model)
 ```
 
-### Evaluation Data Number of Observations
+### Bagged Tree Model
+
+```{r, warning=FALSE}
+# trainControl to 10 folds cross validation
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
+set.seed(seed)
+bagControl = bagControl(fit = ctreeBag$fit, predict = ctreeBag$pred, aggregate = ctreeBag$aggregate)
+bag_model <- train(PH ~., 
+                    data = train_data, method="bag", bagControl = bagControl,
+                   center = TRUE,
+                   scale = TRUE,
+                   trControl = trcontrol,
+                   tuneLength = 25)
+# Make predictions
+bag_pred <- predict(bag_model, newdata = test_data)
+# Model performance metrics
+post_rst<-postResample(obs = test_data$PH, pred=bag_pred)
+results <- data.frame(t(post_rst)) %>% 
+    mutate(Model = "Bagged Tree Model") %>% rbind(results)
+```
+
+### ElasticNet Model
 
 ```{r}
-nrow(df_eval[complete.cases(df_eval),])
+# trainControl to 10 folds cross validation
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
+elas_net_model <- train(PH ~ ., data = train_data, method = "glmnet",
+                        trControl = trcontrol,
+                        tuneLength = 25)
+
+# Make predictions
+elastic_pred <- predict(elas_net_model, newdata = test_data)
+# Model performance metrics
+post_rst<-postResample(obs = test_data$PH, pred=elastic_pred)
+results <- data.frame(t(post_rst)) %>% 
+    mutate(Model = "ElasticNet Model") %>% rbind(results)
 ```
 
-### Evaluation Data Summary
+### SVM Model
 
 ```{r}
-summary(df_eval)
+# trainControl to 10 folds cross validation
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
+svm_model <- train(PH ~.,
+                data=train_data,
+                method = "svmRadial",
+                preProc = c("center", "scale"),
+                tuneLength = 25,
+                trControl = trcontrol)
+
+# Make predictions
+svm_pred <- predict(svm_model, newdata = test_data)
+# Model performance metrics
+post_rst<-postResample(obs = test_data$PH, pred=svm_pred)
+results <- data.frame(t(post_rst)) %>% 
+    mutate(Model = "SVM Model") %>% rbind(results)
+
 ```
-
-
-### Target Variable Distribution (pH)
-
-The target variable has only 4 rows that missing. We will remove the missing values for analysis for now.
-
-```{r message = F}
-df_train<-df_train %>% drop_na(PH)
-plot(density(df_train$PH),main = 'pH Value Distribution', xlab = 'pH', ylab = "")
-```
-
-
