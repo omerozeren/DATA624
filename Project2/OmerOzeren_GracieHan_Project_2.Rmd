@@ -114,7 +114,7 @@ This plot below indicates relationship between target and explanantory variables
 
 ```{r message = F}
 df_train %>% 
-  gather(-PH, -`Brand Code`, key="Var", value="Value") %>% 
+  gather(-PH, -BrandCode, key="Var", value="Value") %>% 
   ggplot(aes(x=PH, y=Value)) +
   geom_point(alpha=0.01, col = "blue") +
   facet_wrap(~ Var, scales = "free", ncol=6)
@@ -134,7 +134,7 @@ corrplot::corrplot(cor(df_train[,-1], use = 'complete.obs'),
 Correlation plot above indicates that some explanantory variables are correleted each other. We find out explanantory variables that hig correleted each other by using findCorrelation() with using threshold as 0.6.
 
 ```{r message = F}
-df_train_cor <- cor(df_train %>% select( -`Brand Code`), use="complete.obs")
+df_train_cor <- cor(df_train %>% select( -BrandCode), use="complete.obs")
 findCorrelation(df_train_cor, .6, names = TRUE)
 ```
 
@@ -161,6 +161,18 @@ top_df_train_cor %>%
 
 **GRACIEHAN's comments**
 
+
+## Near Zero Variance Predictors
+
+```{r}
+non_zero <- nearZeroVar(df_train)
+colnames(df_train[,non_zero])
+```
+
+"Hyd Pressure1" should be removed from the dataset isce it hold constant values.
+
+
+
 ### Missing Values
 
 Using VIM library to explore missing values.
@@ -168,16 +180,15 @@ Using VIM library to explore missing values.
 ```{r message = F, warning=FALSE}
 library(mice)
 library(VIM)
-#aggr(df_train, col=c('black','red'),  sortVars=T,numbers=T, cex.axis=0.5)
 aggr(df_train, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df_train), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
 **GRACIEHAN's comments**
 
 ```{r message = F}
-#imputer<-mice(df_train, method = "rf", print = FALSE, seed = 143)
-#ph_data <-complete(imputer)
-#summary(ph_data)
+imputer<-mice(df_train, method = "rf", print = FALSE, seed = 143)
+ph_data <-complete(imputer)
+summary(ph_data)
 ```
 
 
