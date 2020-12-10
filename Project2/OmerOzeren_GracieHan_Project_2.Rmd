@@ -1,0 +1,236 @@
+---
+title: "DATA 624 - PROJECT 2"
+author: "OMER OZEREN - GRACIE HAN"
+output:
+  html_document:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+always_allow_html: true    
+---
+# Project 2
+
+This is role playing.  I am your new boss.  I am in charge of production at ABC Beverage and you are a team of data scientists reporting to me.  My leadership has told me that new regulations are requiring us to understand our manufacturing process, the predictive factors and be able to report to them our predictive model of PH.
+
+Please use the historical data set I am providing.  Build and report the factors in BOTH a technical and non-technical report.  I like to use Word and Excel.  Please provide your non-technical report in a  business friendly readable document and your predictions in an Excel readable format.   The technical report should show clearly the models you tested and how you selected your final approach.
+
+Please submit both Rpubs links and .rmd files or other readable formats for technical and non-technical reports.  Also submit the excel file showing the prediction of your models for pH
+
+
+
+```{r, echo = T, results = 'hide'}
+
+library(tidyverse)
+library(kableExtra)
+library(xgboost)
+library(plyr)
+library (e1071)
+library(corrplot)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(caret)
+library(Matrix)
+library(writexl)
+library(psych)
+```
+
+### Load the Train Data
+
+```{r, load-traindata}
+temp_file <- tempfile(fileext = ".xlsx")
+download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master/Project2/StudentData.xlsx", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+#load xl from temp
+df_train <- readxl::read_excel(temp_file,skip=0)
+```
+
+### Train Data Statistics
+
+```{r}
+dim(df_train)
+```
+
+### Train Data Number of Observations
+
+```{r}
+nrow(df_train[complete.cases(df_train),])
+```
+
+### Train Data Summary
+
+```{r}
+summary(df_train)
+```
+
+The training data set contains 2571 observations and 33 variables. The variable name BrandCode is a character variable, the remaining variables are numeric. PH is the response variable.
+
+
+### Summary Statistics of Train Data
+
+```{r message = F, warning=FALSE}
+kable(describe(df_train)[,-c(1,6,7,13)], 
+      caption = "Descriptive Statistics for Train Data",
+      digit = 2L)
+```
+
+**GRACIEHAN's comments**
+
+### Visualization of Predictors
+
+```{r message = F}
+df_train[,-c(1)]  %>%
+  gather(Variable, Values) %>%
+  ggplot(aes(x = Values)) +
+  geom_histogram(alpha = 0.2, col = "black", bins = 15) +
+  facet_wrap(~ Variable, scales = "free", nrow = 6)
+```
+
+**GRACIEHAN's comments**
+
+
+### Outliers Analysis with Boxplot 
+
+
+```{r message = F}
+df_train[,-c(1)] %>% 
+  gather(Variable, Values) %>% 
+  ggplot(aes( y = Values)) +
+  geom_boxplot() +
+  facet_wrap(~ Variable, scales = "free", nrow = 6)
+```
+
+**GRACIEHAN's comments**
+
+
+
+### Relationships Between the Target and Explanatory Variables
+
+This plot below indicates relationship between target and explanantory variables
+
+```{r message = F}
+df_train %>% 
+  gather(-PH, -`Brand Code`, key="Var", value="Value") %>% 
+  ggplot(aes(x=PH, y=Value)) +
+  geom_point(alpha=0.01, col = "blue") +
+  facet_wrap(~ Var, scales = "free", ncol=6)
+```
+
+### Correlation
+
+
+```{r corrgram, fig.width=5, fig.height=5}
+corrplot::corrplot(cor(df_train[,-1], use = 'complete.obs'),
+         method = 'square', type = 'lower', order = 'original',
+         hclust.method = 'ward.D2', tl.cex = 0.7)
+```
+
+**GRACIEHAN's comments**
+
+Correlation plot above indicates that some explanantory variables are correleted each other. We find out explanantory variables that hig correleted each other by using findCorrelation() with using threshold as 0.6.
+
+```{r message = F}
+df_train_cor <- cor(df_train %>% select( -`Brand Code`), use="complete.obs")
+findCorrelation(df_train_cor, .6, names = TRUE)
+```
+
+Below shows top 10  Explanatory variables that  positively correleted highly to PH
+
+```{r message = F}
+top_df_train_cor <- df_train_cor %>% as.data.frame() %>% select(PH) %>% 
+  rownames_to_column() %>% 
+  arrange(desc(PH))
+top_df_train_cor %>%
+  top_n(10, PH)
+```
+
+**GRACIEHAN's comments**
+
+
+Below shows top 10  Explanatory variables that  negatively correleted highly to PH
+
+```{r message = F}
+top_df_train_cor %>%
+  top_n(-10, PH) %>%
+  arrange(PH)
+```
+
+**GRACIEHAN's comments**
+
+### Missing Values
+
+Using VIM library to explore missing values.
+
+```{r message = F, warning=FALSE}
+library(mice)
+library(VIM)
+#aggr(df_train, col=c('black','red'),  sortVars=T,numbers=T, cex.axis=0.5)
+aggr(df_train, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df_train), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
+**GRACIEHAN's comments**
+
+```{r message = F}
+#imputer<-mice(df_train, method = "rf", print = FALSE, seed = 143)
+#ph_data <-complete(imputer)
+#summary(ph_data)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Load the Evaluation Data
+```{r, load-Evaluationdata}
+temp_file <- tempfile(fileext = ".xlsx")
+download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master/Project2/StudentEvaluation.xlsx", 
+              destfile = temp_file, 
+              mode = "wb", 
+              quiet = TRUE)
+#load xl from temp
+df_eval <- readxl::read_excel(temp_file,skip=0)
+```
+
+The data set contains 267 observations and 33 variables. The variable name BrandCode is a character variable, the remaining variables are numeric. PH is the respond variable 
+
+### Evaluation Data Statistics
+
+```{r}
+dim(df_eval)
+```
+
+### Evaluation Data Number of Observations
+
+```{r}
+nrow(df_eval[complete.cases(df_eval),])
+```
+
+### Evaluation Data Summary
+
+```{r}
+summary(df_eval)
+```
+
+
+### Target Variable Distribution (pH)
+
+The target variable has only 4 rows that missing. We will remove the missing values for analysis for now.
+
+```{r message = F}
+df_train<-df_train %>% drop_na(PH)
+plot(density(df_train$PH),main = 'pH Value Distribution', xlab = 'pH', ylab = "")
+```
+
+
