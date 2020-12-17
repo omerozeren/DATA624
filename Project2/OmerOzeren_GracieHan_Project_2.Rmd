@@ -8,7 +8,10 @@ output:
     toc: yes
     toc_depth: 5
     toc_float: yes
-always_allow_html: true    
+  word_document:
+    toc: yes
+    toc_depth: '5'
+always_allow_html: yes
 ---
 # Project 2
 
@@ -19,9 +22,11 @@ Please use the historical data set I am providing.  Build and report the factors
 Please submit both Rpubs links and .rmd files or other readable formats for technical and non-technical reports.  Also submit the excel file showing the prediction of your models for pH
 
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, error=FALSE, warning=FALSE, message=FALSE, fig.align="center")
+```
 
-```{r, echo = T, results = 'hide', warning=FALSE}
-
+```{r, echo = T, results = 'hide',warning=FALSE}
 library(tidyverse)
 library(kableExtra)
 library(xgboost)
@@ -39,6 +44,7 @@ library(psych)
 
 ### Load the Evaluation Data
 ```{r, load-Evaluationdata}
+set.seed(123)
 temp_file <- tempfile(fileext = ".xlsx")
 download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master/Project2/StudentEvaluation.xlsx", 
               destfile = temp_file, 
@@ -52,11 +58,10 @@ df_eval$Brand.Code = as.factor(df_eval$Brand.Code)
 
 The data set contains 267 observations and 33 variables. The variable name BrandCode is a character variable, the remaining variables are numeric. PH is the respond variable 
 
-
-
 ### Load the Train Data
 
 ```{r, load-traindata}
+set.seed(123)
 temp_file <- tempfile(fileext = ".xlsx")
 download.file(url = "https://raw.githubusercontent.com/omerozeren/DATA624/master/Project2/StudentData.xlsx", 
               destfile = temp_file, 
@@ -93,19 +98,14 @@ The training data set contains 2571 observations and 33 variables. The variable 
 
 ### Summary Statistics of Train Data
 
-```{r message = F, warning=FALSE}
-kable(describe(df_train)[,-c(1,6,7,13)], 
-      caption = "Descriptive Statistics for Train Data",
-      digit = 2L)
+```{r}
+describe(df_train)
 ```
 
 There are 2038 observations that has no missing values in any of the 33 columns, which indicates that the data has minimum missing values. It also means that there are 533 (2571 minus 2038) observations that has some missing values in some of their variables. 
-
-Looking at Missing values of each of the numerical variables, the maximum NA is 212 at MFR ,followed by Filler Speed (57 missing), followed by a few variables which has missing values in 30s (PC volume, fill ounces, PSC CO2, carb pressure 1, hyd  pressure 4,), then Followed by variables which has missing values in 20s (carb pressure, PSC Phil, feel pressure, filler level).  Then, the rest of the variabl. es Have missing values that are in teens or below. 
-
-Kurtosis For each of the variables also confirmed that MFR is highly skilled with Kurtosis=30.46.Mnf Flow have a median at 724, and mean at 704. But the range of it is from 31.4 till 868, with a wopping range of 837!
-
-Besides MFR, the skewness of the  rest of the variables are alright. The next batch of variables with relatively high skewness (their Kurtosis value) is temperature ( endpoint one 6 ), oxygen filler ( 11.09 ), And air pressure ( 4.73 ) .
+Looking at Missing values of each of the numerical variables, the maximum NA is 212 at MFR ,followed by Filler Speed (57 missing), followed by a few variables which has missing values in 30s (PC volume, fill ounces, PSC CO2, carb pressure 1, hyd  pressure 4), then Followed by variables which has missing values in 20s (carb pressure, PSC Phil, feel pressure, filler level).Then, the rest of the variables Have missing values that are in teens or below. 
+Kurtosis For each of the variables also confirmed that MFR is highly skilled with Kurtosis=30.46.  Mnf Flow have a median at 724, and mean at 704. But the range of it is from 31.4 till 868, with a wopping range of 837!
+Besides MFR, the skewness of the  rest of the variables are alright. The next batch of variables with relatively high skewness (their Kurtosis value) is temperature ( endpoint one 6 ), oxygen filler ( 11.09 ), and air pressure ( 4.73 ) .
 
 #### Visualization of Target Variable (pH)
 
@@ -119,68 +119,99 @@ df_train %>%
   labs(y = 'Count', title = 'PH histogram') 
 ```
 
+The outcome variable, PH value in the beverage, is shown on histogram here. We can see that it is a continuous variable with no gap at no clear patterns of missing value.
 
-Visualization of histogram of each individual predictor variables indicate that beside the numerical variables, there are many categorical variables (discrete variables), such as pressure.set point, aich.rel).
+Except a few observations which is somewhat outliers at the right tale, it pretty much follows a normal distribution. There are slightly more observations on the right side ( higher values ) of the histogram, but we decide not to do too much about it because the s Skewness is minimum. 
 
-The obvious discrete variables are: Brand Code (ABCD 4 brands in total), Pressure Setpoint, Bowl Setpoint, PSC.CO2, Pressure Vacuume.  Each of these varaiables have no more than 10-12 unique numbers to make the count.
-
-There are some bi-mode variables (such as pressure set point, density, hyd pressure 2, hyd pressure3).  Multi-mode (>2mode) Variables include carb flow.
-
-Histogram also indicated the right skewness of MFR, which has a spike of counts at around the 40. 
-These variables have a significant numbers of apps observations at 0: hyd pressure1,hyd pressure2,hyd pressure 3,
-The close to normally distributed variables judging from the histograms are : carb pressure 1, carb  pressure 2, Carb Temp, Carb Volume, Fill Ounces, PC Volume. We chose bins=15 and facet wrap for the histograms. This findings are preserved after  changing the numbers of bins.
+We decided that this outcome is satisfactory in being used as is as a numerical variable outcome.  We will provide models based on PH outcome as a continuous numerical variable, without intentional cutoff points below.  
 
 
 ### Visualization of Predictors
 
-```{r message = F}
+```{r}
 df_train[,-c(1)]  %>%
   gather(Variable, Values) %>%
   ggplot(aes(x = Values)) +
   geom_histogram(alpha = 0.2, col = "black", bins = 15) +
-  facet_wrap(~ Variable, scales = "free", nrow = 6)
+  facet_wrap(~ Variable, scales = "free", nrow = 4)
 ```
 
 Visualization of histogram of each individual predictor variables indicate that beside the numerical variables, there are many categorical variables (discrete variables), such as pressure.set point, aich.rel).
 
-The obvious discrete variables are: Brand Code (ABCD 4 brands in total), Pressure Setpoint, Bowl Setpoint, PSC.CO2, Pressure Vacuume.  Each of these varaiables have no more than 10-12 unique numbers to make the count.
+The obvious discrete variables are:
+  Brand Code (ABCD 4 brands in total), Pressure Setpoint, Bowl Setpoint, PSC.CO2, Pressure Vacuume. 
+  Each of these varaiables have no more than 10-12 unique numbers to make the count.
 
-There are some bi-mode variables (such as pressure set point, density, hyd pressure 2, hyd pressure3).  Multi-mode (>2mode) Variables include carb flow.
+There are some bi-mode variables:
+  (such as pressure set point, density, hyd pressure 2, hyd pressure3).  
+Multi-mode (>2mode) Variables include carb flow.
 
 Histogram also indicated the right skewness of MFR, which has a spike of counts at around the 40. 
-These variables have a significant numbers of apps observations at 0: hyd pressure1,hyd pressure2,hyd pressure 3,
-The close to normally distributed variables judging from the histograms are : carb pressure 1, carb  pressure 2, Carb Temp, Carb Volume, Fill Ounces, PC Volume. We chose bins=15 and facet wrap for the histograms. This findings are preserved after  changing the numbers of bins.
+
+These variables have a significant numbers of apps observations at 0: 
+  hyd pressure1,hyd pressure2,hyd pressure 3,
+  
+The close to normally distributed variables judging from the histograms are : 
+  carb pressure 1, carb  pressure 2, Carb Temp, Carb Volume, Fill Ounces, PC Volume. 
+  
+We chose bins=15 and facet wrap for the histograms. This findings are preserved after  changing the numbers of bins.
 
 
 ### Outliers Analysis with Boxplot 
 
 
-```{r message = F}
+```{r}
 df_train[,-c(1)] %>% 
   gather(Variable, Values) %>% 
   ggplot(aes( y = Values)) +
   geom_boxplot() +
-  facet_wrap(~ Variable, scales = "free", nrow = 6)
+  facet_wrap(~ Variable, scales = "free", nrow = 4) +
+    theme(panel.background = element_rect(fill = 'white'),
+        axis.text.x = element_text(size = 10, angle = 90)) 
 ```
 
-Because some of the variables are skewed, so the box plot shows data many of these predictors are recognized as outliers.  these variables include MFR ,filler.speed, Oxygen,filler, Air.presseurer. But we predict that after transformation later on, some of these so called "outliers" will not persist. 
-Besides the above mentioned four variables, these variables also have extreme outliers: PSC fill, PSC CO2, Temperature, Pressure.vacume, Alch.Rel, Carb.Rel.
+Because some of the variables are skewed, so the box plot shows data many of these predictors are recognized as outliers. these variables include:
+  - MFR ,
+  - filler.speed,
+  - Oxygen,filler,
+  - Air.presseurer. 
+But we predict that after transformation later on, some of these so called "outliers" will not persist. Besides the above mentioned four variables, these variables also have extreme outliers: 
+      - PSC fill,
+      - PSC CO2, 
+      - Temperature,
+      - Pressure.vacume,
+      - Alch.Rel, 
+      - Carb.Rel.
 
 Interestingly, the outcome variable pH also have a few outliers. 
 
 
-
 ### Relationships Between the Target and Explanatory Variables
 
-This plot below indicates relationship between target and explanantory variables
+This plot below indicates relationship between target and explanatory variables
 
-```{r message = F}
+```{r }
 df_train %>% 
   gather(-PH, -Brand.Code, key="Var", value="Value") %>% 
   ggplot(aes(x=PH, y=Value)) +
   geom_point(alpha=0.01, col = "blue") +
-  facet_wrap(~ Var, scales = "free", ncol=6)
+  facet_wrap(~ Var, scales = "free", ncol=4) +
+      theme(panel.background = element_rect(fill = 'white'),
+        axis.text.x = element_text(size = 10, angle = 90)) 
 ```
+
+Among all 33 predicted variables my, majority of them have clear Association with the outcome. Maybe half of these predictors, if they are numerical and continuous, have clear relationship to the outcome in linear fashion. The predictors that clear Le demonstrate the linearity with the outcome include below: 
+
+Carb volume, fill ounces, PC volumes, carb pressure, carb temperatures, PSC fill, PSC, carb pressure1, carb rel. 
+
+Explaining these variables from common sense perspective, they all make sense in beverage production, we feel that these variables are the predictors that have good and continuous measurement, oftentimes from the environment, rather than work worker controlled source. Therefore, it is not surprising that they have good linearity with the pH value (outcome) of the beverage. 
+
+Above is the good news from predictors, which favors linear model, as well as other tree based the models. However, we have also seen that many other variables, even that they are linear and numerical predictors, they either have outliers, or their measure month is not continuous enough, in other words, interrupted in patterns, therefore may produce errors if we fit the linear model two outcome directly without tuning of these variables, or without other sophisticated modeling. Such non perfect numerical predictor variables include: 
+
+Mnf Flow, fill pressure, Hyd pressure 1, Hyd Pressure2, Hyd pressure3, Fill levels, Filler Speed, temperature, carb flow, MFR, Density, Bailing, Oxygen Filler, Air Pressure 
+
+
+Finally many of the predictor variables are in discrete or nominal variable fashion, which has levels in less than 10 or even 3.  so when we fit these variables into the model, we have to be oh extremely careful that the levels of predictors can be overly simplified in terms of explanation due to the overly crude way of describing the nature of this variable.  
 
 ### Correlation
 
@@ -191,23 +222,26 @@ corrplot::corrplot(cor(df_train[,-1], use = 'complete.obs'),
          hclust.method = 'ward.D2', tl.cex = 0.7)
 ```
 
+
 We find the following very strong correlations:
-Carb.Volume with Density, Balling, Alch.Rel, Carb.Rel, and Balling.Lvl.
-Carb.Pressure with Carb.Temp
-Filler.Level with Bowl.Setpoint
-Filler.Speed with MFR
+  - Carb.Volume with Density, Balling, Alch.Rel, Carb.Rel, and Balling.Lvl.
+  - Carb.Pressure with Carb.Temp
+  - Filler.Level with Bowl.Setpoint
+  - Filler.Speed with MFR
 
-Correlation plot above indicates that some explanantory variables are correleted each other. We find out explanantory variables that hig correleted each other by using findCorrelation() with using threshold as 0.6.
+Correlation plot above indicates that some explanantory variables are correleted each other. 
+
+We find out explanantory variables that hig correleted each other by using findCorrelation() with using threshold as 0.6.
 
 
-```{r message = F}
+```{r }
 df_train_cor <- cor(df_train %>% select( -Brand.Code), use="complete.obs")
 findCorrelation(df_train_cor, .6, names = TRUE)
 ```
 
 Below shows top 10  Explanatory variables that  positively correleted highly to PH
 
-```{r message = F}
+```{r }
 top_df_train_cor <- df_train_cor %>% as.data.frame() %>% select(PH) %>% 
   rownames_to_column() %>% 
   arrange(desc(PH))
@@ -215,21 +249,24 @@ top_df_train_cor %>%
   top_n(10, PH)
 ```
 
-Bowl Setpoint, Filler Level, Carb Flow, Pressure Vacuum are the top 5 explanatory variables that are positively associated with the PH outcome. Their correlation to the PH outcome rANGES FROM 0.36 (TOP1) TO 0.22 (TOP 5TH).  
+Bowl Setpoint, Filler Level, Carb Flow, Pressure Vacuum are the top 5 explanatory variables that are positively associated with the PH outcome. 
+
+Their correlation to the PH outcome rANGES FROM 0.36 (TOP1) TO 0.22 (TOP 5TH).  
 
 The next set of varialbes (top 6-top10) have a correlation to outcome range from 0.196 (top 6th) to 0.098 (top 10th).
-Below shows top 10  Explanatory variables that  negatively correleted highly to PH
+
+Below shows top 10  Explanatory variables that  negatively correlated highly to PH
 
 
-Below shows top 10  Explanatory variables that  negatively correleted highly to PH
-
-```{r message = F}
+```{r }
 top_df_train_cor %>%
   top_n(-10, PH) %>%
   arrange(PH)
 ```
 
-**GRACIEHAN's comments**
+Mnf Flow stands out as the top 1 variable that is negatively associated with the PH outcome (correlation = -0.46), with a much higher correlation than the 2nd variable Usage Count (correlation at -0.35).  
+
+Also, Fill Pressure, PRessure Setpoint have a correlation with PH around -0.35.  
 
 
 ### Near Zero Variance Predictors
@@ -237,6 +274,7 @@ top_df_train_cor %>%
 ```{r}
 non_zero <- nearZeroVar(df_train)
 colnames(df_train[,non_zero])
+non_zero
 ```
 
 "Hyd Pressure1" should be removed from the dataset since it hold constant values.WE are going to handle this in Model Data PreProcessing part
@@ -246,13 +284,19 @@ colnames(df_train[,non_zero])
 
 Using VIM library to explore missing values.
 
-```{r message = F, warning=FALSE}
+```{r}
 library(mice)
 library(VIM)
 aggr(df_train, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df_train), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
-**GRACIEHAN's comments**
+MFR stands out as a Having a significant  amount of missings. 
+
+Followed by fillet speed, pace co2. 
+
+These three variables contains as many missing values as the rest of all missing values from all variables. 
+
+The pattern of MR indicates that it has more missing values at the high end, and the also in the middle part. 
 
 
 ## Modeling Data PreProcessing
@@ -271,8 +315,13 @@ df_model_eval = df_eval_imputed[,-avoid_features]
 summary(df_model_train)
 ```
 
+We used MICE package, CMM method to impute the missing data.
 
-**GRACIEHAN's comments**
+For the variables that has near zero observations, we used the function of nearzeroVar, to avoid imputing the missing zeros.
+
+From previous data exploration, we know that the non-zero  observations occur most in the variables of HYD pressure1.  
+
+By choosing not to impute the variable of HYD pressure1 (with non zeros), in the evaluated model, we exclude that variable.
 
 let's look at the variables missing percentage after impution to check if we missing anything.
 
@@ -280,12 +329,17 @@ let's look at the variables missing percentage after impution to check if we mis
 aggr(df_model_train, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df_train), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
 ```
 
+By using the aggr function, we visualized the missing variables again.
+
+We can see that on the left side graph, there is no missing values from the data anymore. On the right side, the figure shows that all the missing variables are now complete. 
+
+This figure (on the right side) also showed us that there is one variable that this amputation has excluded, due to our command to exclude the near zero variable, and as we know, this variable is HYD pressure1.  Now the data is good for furthe analysis. 
 
 ### Splitting Data Set
 
 Splitting dataset into training and test sets.
 
-```{r, message=FALSE}
+```{r}
 set.seed(123)
 training.samples <- df_model_train$PH %>%
 createDataPartition(p = 0.8, list = FALSE)
@@ -293,12 +347,28 @@ train_data  <- df_model_train[training.samples, ]
 test_data <- df_model_train[-training.samples, ]
 ```
 
+We used the 80/20 rule to create the training data set and the testing data set. The function of createDataPartition is used for
+that purpose, which select the random sample from the completed Data. Here, completed means imputed data.
+
+
 ## Model Building  & Evaluation
 
 
 ```{r merge_results}
 models_test_evaluation <- data.frame()
 ```
+
+Now the Data has been evaluated, with missing that is imputed.
+The Data is ready to go for various of Modeling effort.
+
+First,before any modeling occured, we created an empty data frame called models_test_evaluation, which is the place holder for all the model evaluates.  For each model, we will select Root Mean Square of Error (RMSE), R-squared, Mean Aboslute Error (MAE).  Once these evaluators are available from the model run, they are put into this dataframe, one row per modeling.
+
+We first will run the traditional linear regression model, as we have numerical outcome, and mostly numerical predictors.
+
+Next we will apply a few of the tree-based model and rule based models, which are more modern, and utilizing the 33 variables in an ensumble (or bagged way/mechanism), rather than assuming all linearity relationship to the outcome for all 33 predictor variables indiviually, Which as we know is a very strict assumption, and our data does not fully support that assumption. 
+
+Most of the variables are associated with outcome, but not in the linear fashion.
+
 
 ### Linear Regression  Model
 
@@ -308,16 +378,33 @@ log_model <- lm(PH~.,data = train_data)
 summary(log_model)
 ```
 
-This is our basic banhmark model
+First, we run linear regression model.  This is our basic banhmark model.
 
-**GRACIEHAN's comments**
+
+Because linear regression is a traditional model, and our data contains mostly numerical continuous variable, and our outcome
+pH is also continuous variable. Therefore we first chose linear model as the basic machine learning technique to predict the beverage's PH outcome.
+
+We used the LM function for linear regression model. All variables are fitted directly into them model as it was defined in the original data, with missing that is filled in. 
+
+The overall F statistics is 33.98 all 33 variables, with 2024 degree of freedoms (Our training data contains 2571 observations, minuus the corresponding num of variables,  equals 2024.). There is a high significant P value for the overall model, but we have to be very careful that over fit Could be the culprit behind this P value.
+
+Examining the T students statistics and associated P values with it, the following variables are highly significant:
+     - Brand code C versus A,
+     - Brand code D Versus A,
+     - MFR, carb flow, carb pressure 1,
+     - Temperature, usage count, balling, Oxygen filler, Bowl setpoint, pressure setpoint, balling lvl
+    
+The next few models are all assuming non-linear fashion, which are more popular machine learning algorithms and also more truthful to this data prediction. We chosed a few tree-based modeling.  
+
+The ensemble techniques of the nonlinear models have a few advantages. By packing or bagging the variables into trees,the variance of a prediction through these ensemble process are reduced, which fit even the unstable predictions with less stringent assumption than linear
+model. 
+
 
 ### Bagged Tree Model
 
-```{r, warning=FALSE}
-
-trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
+```{r}
 set.seed(123)
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 bagControl = bagControl(fit = ctreeBag$fit, predict = ctreeBag$pred, aggregate = ctreeBag$aggregate)
 bag_model <- train(PH ~., 
                     data = train_data, method="bag", bagControl = bagControl,
@@ -331,35 +418,35 @@ bag_pred <- predict(bag_model, newdata = test_data)
 post_rst<-postResample(obs = test_data$PH, pred=bag_pred)
 models_test_evaluation <- data.frame(t(post_rst)) %>% 
     mutate(Model = "Bagged-Tree ") %>% rbind(models_test_evaluation)
+# summary Bagged Model
+summary(bag_model)
+# Residual plots
+plot(residuals(bag_model))
+# Variable feature importance plot
+varImp(bag_model)  %>% 
+     ggplot(aes(x = reorder(rownames(.), desc(Overall)), y = Overall))
 ```
 
 
-**GRACIEHAN's comments**
+First tree based models We selected in is bagged tree model. Each Model in the bagged tree ensemble is used to generate a prediction for a new sample and these M predictions are averaged to give the bag to models prediction. Two steps Algorithms are used, 
+  First upon bootstrapling sample of the original data is generated; 
+  Second step, pruning of the tree model is produced. 
+This algorithm applies from first to the mth (from 1 to M) observations, and then repeated so on so forth.
 
-### Cubist Model
+Compared with linear regression model, backing also has another advantage, where they provide their own internal estimate of performance
+with cross validation. In our model, we Chose five bootstrap samples for each algorithem, and then fit 10 Cross valication, with 25
+tuning algorithms. 
 
-```{r,warning=FALSE}
-# trainControl to 10 folds cross validation
-trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
-cubist_model <- train(PH ~ ., data = train_data, method = "cubist",
-                        trControl = trcontrol,
-                        tuneLength = 25)
+We chose not to print the evaluation, rather we we will produce summary data set which contains this model evaluation side-by-side at the end.
 
-# Make predictions
-cubist_pred <- predict(cubist_model, newdata = test_data)
-# Model performance metrics
-post_rst<-postResample(obs = test_data$PH, pred=cubist_pred)
-models_test_evaluation <- data.frame(t(post_rst)) %>% 
-    mutate(Model = "Cubist") %>% rbind(models_test_evaluation)
-```
-
-
-**GRACIEHAN's comments**
+Because bagged bootstrapping is an computationally really expensive process, the run time yes about 5 to 10 times longer compared
+to the linear model.
 
 ### SVM Model
 
-```{r,warning=FALSE}
+```{r}
 # trainControl to 10 folds cross validation
+set.seed(123)
 trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 svm_model <- train(PH ~.,
                 data=train_data,
@@ -374,16 +461,27 @@ svm_pred <- predict(svm_model, newdata = test_data)
 post_rst<-postResample(obs = test_data$PH, pred=svm_pred)
 models_test_evaluation <- data.frame(t(post_rst)) %>% 
     mutate(Model = "SVM") %>% rbind(models_test_evaluation)
-
+# Summary Model
+summary(svm_model)
+# Residual plots
+plot(svm_model)
+# Variable feature importance plot
+varImp(svm_model)  %>% 
+     ggplot(aes(x = reorder(rownames(.), desc(Overall)), y = Overall))
 ```
 
 
-**GRACIEHAN's comments**
+Support vector machine algorithm has some advantage over linear regression in that it minimize the effect of outliers. 
+
+In linear regression even one outlier can influence parameter estimation, but SVM uses the Square to residuals when the abosulte outliers are small while uses the absolute residuals when the absolute residuals are large.  By this "weighted effect", the mangitude of outlier influence is minimized.  
+
+Because our data contains quite a few outliers in a few of the observations ,we expect that SVM will give us a more robust prediction than linear model.
 
 ### KNN Model
-```{r ,warning=FALSE}
-# trainControl to 10 folds cross validation
-trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
+```{r}
+# trainControl to 10 folds CV
+set.seed(123)
+trcontrol =trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 knn_model <- train(PH ~.,
                 data=train_data,
                 method = "knn",
@@ -397,23 +495,31 @@ knn_pred <- predict(knn_model, newdata = test_data)
 post_rst<-postResample(obs = test_data$PH, pred=knn_pred)
 models_test_evaluation <- data.frame(t(post_rst)) %>% 
     mutate(Model = "KNN ") %>% rbind(models_test_evaluation)
+summary(knn_model)
+# Residual plots
+plot(residuals(knn_model))
+# Variable feature importance plot
+varImp(knn_model)  %>% 
+     ggplot(aes(x = reorder(rownames(.), desc(Overall)), y = Overall))
 ```
 
 
-**GRACIEHAN's comments**
+KNN, which stands for K nearest neighbors model, utilizes the K closest samples (Usually in means)from the training set to predict. Its prediction power can be negatively influenced by different skills of predictions, which generates unbalanced distance. Because the 33 variables of ours have such issue, we utilized the Options of centered and scaled predictors to overcome this issue.
+
+As with other model, 10 folds of cross validation were chosen, and 25 tuning algorithm within the KNN modeling were specified. The models evaluation were bind into the models_test_evaluation data frame, to compared with other models. 
+
 
 ### Random Forest
 
-```{r,warning=FALSE}
+```{r}
 # trainControl to 10 folds cross validation
-trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 set.seed(123)
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 rf_model <- train(PH ~., 
                  data = train_data,
                  method = "rf", 
                  tuneLength = 25,
-                 trControl = trcontrol
-                 )
+                 trControl = trcontrol)
 
 # Make predictions
 rf_pred <- predict(rf_model, newdata = test_data)
@@ -421,16 +527,56 @@ rf_pred <- predict(rf_model, newdata = test_data)
 post_rst<-postResample(obs = test_data$PH, pred=rf_pred)
 models_test_evaluation <- data.frame(t(post_rst)) %>% 
     mutate(Model = "Random Forest") %>% rbind(models_test_evaluation)
+summary(rf_model)
+# Residual plots
+plot(residuals(rf_model))
+plot(rf_model)
+# Variable feature importance plot
+#varImp(rf_model)  %>% 
+#     ggplot(aes(x = reorder(rownames(.), desc(Overall)), y = Overall))
 ```
 
 
-**GRACIEHAN's comments**
+Random forest is one step further of the bagged tree model, but it differs from the simple bagged tree samples that it completely removes the inter-dependency of bootstrap samples from regular tree models. It reduces the correlation among predictors by and adding randomness to the construction process, hence with the name random forest.
+
+As with other models, we specified 10 cross validations, 25 tuning algorithms, and we export the model evaluators for future comparisons.
+
+### Cubist Model
+
+```{r}
+# trainControl to 10 folds cross validation
+set.seed(123)
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
+cubist_model <- train(PH ~ ., data = train_data, method = "cubist",
+                        trControl = trcontrol,
+                        tuneLength = 25)
+
+# Make predictions
+cubist_pred <- predict(cubist_model, newdata = test_data)
+# Model performance metrics
+post_rst<-postResample(obs = test_data$PH, pred=cubist_pred)
+models_test_evaluation <- data.frame(t(post_rst)) %>% 
+    mutate(Model = "Cubist") %>% rbind(models_test_evaluation)
+# Residual plots
+plot(residuals(cubist_model))
+plot(cubist_model)
+# Variable feature importance plot
+varImp(cubist_model)  %>% 
+     ggplot(aes(x = reorder(rownames(.), desc(Overall)), y = Overall))
+```
+
+Cubist is a rule-based machine learning model.  A rule based machine learner has one step further than the tree based modeling, in that is the identification and utilization of a set of relational rules that collectively represent the knowledge. In contrast to Tree based models, Which generate machine learning rule (also only SINGLE set of rule is applied) within it self, or in other case, uses only one rule universally across all the algorithms.
+
+A cute best model resembles a piecewise linear model to predict numeric values, except that the rules can overlap.
+
+Here, we did the 10 cross validation within each ensemble, with 25 tuning lens length. Then Store the RMS and other evaluators for print out later, and store them into the models_test_evaluation data frame as a row.
+
 
 ### Multivariate Adaptive Regression Splines (MARS)
-```{r,warning=FALSE}
+```{r}
 # trainControl to 10 folds cross validation
-trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 set.seed(123)
+trcontrol = trainControl("cv", number = 10, savePredictions=FALSE,  index = createFolds(train_data$PH, 10), verboseIter = FALSE)
 mars_model <- train(PH ~., 
                  data = train_data,
                  method = "earth", 
@@ -444,11 +590,18 @@ mars_pred <- predict(mars_model, newdata = test_data)
 post_rst<-postResample(obs = test_data$PH, pred=mars_pred)
 models_test_evaluation <- data.frame(t(post_rst)) %>% 
     mutate(Model = "MARS") %>% rbind(models_test_evaluation)
+summary(mars_model)
+# Residual plots
+plot(residuals(mars_model))
+# Variable feature importance plot
+varImp(mars_model)  %>% 
+     ggplot(aes(x = reorder(rownames(.), desc(Overall)), y = Overall))
 ```
 
 
-**GRACIEHAN's comments**
+Due to the strict assumption of linearity between predictors and outcome, problem arise when multiple variables, in our case, 33 predictors are in presence, many of whom do not have the perfect linear relationship with the outcome.  Such problem might be solved by introducing some nonlinearity in the model, such as to supplement the previous linear regression model with additional complexity.  Adding a squared term, or even higher dimensional term, for some variables, or introducing interaction term with two correlated variables.  But the model can be overly complex by such, which introduces many more unnecessary variables in addition to the existing 33 variables, which exacerbates the overfitting problem even further.   
 
+The multivariate adaptive regression spline (MARS) model is a solution to such dilemma.  When used with a single predictor, MARS can fit separate linear regression lines for different ranges of engine displacement. The slopes and intercepts are estimated for this model, as well as the number and size of the separate regions for the linear models. 
 
 ## Model Evalution Summary
 
@@ -458,17 +611,36 @@ models_test_evaluation %>% dplyr::select(Model, RMSE, Rsquared, MAE)
 
 The table above shows our models performance.We evaluated models using below criteria:
 
- 1. R^2 **GRACIEHAN's comments**
- 2. *Root Mean Squared Error* **GRACIEHAN's comments**
- 3. *Mean Absolute Error* (MAE) **GRACIEHAN's comments**
+ 1. R^2
  
-Based on what we've seen above table Cubist model gives best performance among the other models.So we are going to select Cubist models as champion model and predict values
-by using evaluation dataset and export in excel file.
+Overall, Except the MARS model (R^2=0.27), the R squared are Within the range of 0.50 to 0.69 for all the tree based and rule based models.
 
-**GRACIEHAN's comments**
+Remember that the R squared in Linear model is 0.42(multiple R squared), and 0.4081(adjusted R squares), the lower R^2of MARS indicates that it is an inferior model to linear model.  
+
+The rest of five models have shown improvement in R-squared compared to the linear model. The improvements are most robust in random forest model (0.69 R squared, or 50% improvement from the linear model,), and the cubist model model (R-square 0.676, also 50% improvement from the linear model as well).  The KNN and the SVM, bagged tree Model have R-squared around 0.53, not a significant improvement from linear model in terms of R squared.
+
+ 2. *Root Mean Squared Error* 
+ 
+RMSE is interpreted as how far, on average, the residuals are from zero. 
+ 
+The RMSE is lowest in Cubist model (RMSE=0.10) and in random forest model (RMSE=0.101).  The MARS have the worst performance in terms of RMSE (RMSE=0.15).The rest of 3 tree based models (KNN, SVM, bagged tree) have similar RMSE at 0.12.
+
+ 3. *Mean Absolute Error* (MAE) 
+ 
+The MAE value follows exactly the same pattern as RMSE. The best the performers are cubist, random forest model. While the worst performer is MARS. The rest of three models perform similarly.
+ 
+Based on what we've seen above table Cubist model gives best performance among the other models.So we are going to select Cubist models as champion model and predict values by using evaluation dataset and export in excel file.
+
+
+Taking into all considerations of RMSE, R squared, MAE, Cubist is our best model. Random forest model follows very closely to Cubist.
+
+The linear model and the MARS, multi-adaptive regression sblinds model clearly do not have much advantage in predicting PH from these 33 variables.
 
 ```{r, echo=F}
 predictions <- predict(cubist_model, df_model_eval)
 df_eval$PH <- round(predictions, 2) # joining predictions to original evalution data set
 write.csv(df_eval, 'StudentEvaluation_PH_predictions.csv')
 ```
+
+
+
