@@ -25,17 +25,20 @@ machine learning techniques.
 
 ## Linear Regression model equations can be written either directly or indirectly in the form:
 
-### $$y_i = b_0 + b_1x_{i1} + b_2x_{i2} + ... + b_Px_{iP} + e_i$$
+$$
+\begin{align}
+y_i = b_0 +b_1x_{i1} + b_2x_{i2} + ... + b_px_{iP} + \epsilon_i \tag{1}
+\end{align}
+$$
 
-Where:
+where 
 
-- $y_i$ is the outcome or response
-- $b_0$ is the Y-intercept
-- $P$ is the number of predictor variables
-- $b_1$ through $b_P$ are the coefficients or parameters of the regression
-- $x_1$ through $x_P$ are the predictor variables
-- $e_i$ is the prediction error term 
-
+- $y_i$ represents the numerical response of observation i
+- $b_0$ represents the estimated intercept
+- $b_j$ is the estimated coefficient of the jth predictor
+- $x_{ij}$ is the value of the jth feature of observation i
+- P is the number of predictors or explanatory variables
+- $\epsilon_i$ is random error that can't be explained by the model
 
 # Linear Regression models 
 

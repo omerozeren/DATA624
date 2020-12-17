@@ -63,15 +63,19 @@ Omer Ozeren
 <li>Linear Regression is one of the most basic tools a Data Scientist or Analyst can use for analyzing data. It is also used as a prerequiste for other advanced regression and machine learning techniques.</li>
 </ul>
 <h2 id="linear-regression-model-equations-can-be-written-either-directly-or-indirectly-in-the-form">Linear Regression model equations can be written either directly or indirectly in the form:</h2>
-<h3 id="y_i-b_0-b_1x_i1-b_2x_i2-...-b_px_ip-e_i"><span class="math display">\[y_i = b_0 + b_1x_{i1} + b_2x_{i2} + ... + b_Px_{iP} + e_i\]</span></h3>
-<p>Where:</p>
+<p><span class="math display">\[
+\begin{align}
+y_i = b_0 +b_1x_{i1} + b_2x_{i2} + ... + b_px_{iP} + \epsilon_i \tag{1}
+\end{align}
+\]</span></p>
+<p>where</p>
 <ul>
-<li><span class="math inline">\(y_i\)</span> is the outcome or response</li>
-<li><span class="math inline">\(b_0\)</span> is the Y-intercept</li>
-<li><span class="math inline">\(P\)</span> is the number of predictor variables</li>
-<li><span class="math inline">\(b_1\)</span> through <span class="math inline">\(b_P\)</span> are the coefficients or parameters of the regression</li>
-<li><span class="math inline">\(x_1\)</span> through <span class="math inline">\(x_P\)</span> are the predictor variables</li>
-<li><span class="math inline">\(e_i\)</span> is the prediction error term</li>
+<li><span class="math inline">\(y_i\)</span> represents the numerical response of observation i</li>
+<li><span class="math inline">\(b_0\)</span> represents the estimated intercept</li>
+<li><span class="math inline">\(b_j\)</span> is the estimated coefficient of the jth predictor</li>
+<li><span class="math inline">\(x_{ij}\)</span> is the value of the jth feature of observation i</li>
+<li>P is the number of predictors or explanatory variables</li>
+<li><span class="math inline">\(\epsilon_i\)</span> is random error that can’t be explained by the model</li>
 </ul>
 </div>
 <div id="linear-regression-models-1" class="slide section level1">
